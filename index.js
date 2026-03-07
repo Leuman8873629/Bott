@@ -3,28 +3,28 @@ const mineflayer = require("mineflayer");
 const pvp = require("mineflayer-pvp").plugin;
 const { pathfinder, Movements, goals } = require("mineflayer-pathfinder");
 const armorManager = require("mineflayer-armor-manager");
-const AutoAuth = require("mineflayer-auto-auth");
 
 const app = express();
 
-app.get("/", (req, res) => res.send("Bot is running"));
+const PORT = process.env.PORT || 3000;
 
-app.listen(process.env.PORT || 3000, () => {
-  console.log("Web server started");
+app.get("/", (req, res) => {
+  res.send("Minecraft Bot Running");
+});
+
+app.listen(PORT, "0.0.0.0", () => {
+  console.log("Web server running on port " + PORT);
 });
 
 function createBot() {
+
+console.log("Starting bot...");
 
 const bot = mineflayer.createBot({
   host: "157.180.102.179",
   port: 29642,
   username: "rioBekasi",
-  version: "1.20.1",
-
-  plugins: [AutoAuth],
-  AutoAuth: {
-    password: "bot112022"
-  }
+  version: "1.20.1"
 });
 
 bot.loadPlugin(pvp);
@@ -37,6 +37,12 @@ let jumpInterval;
 bot.on("spawn", () => {
 
   console.log("Bot joined server");
+
+  // auto register / login
+  setTimeout(() => {
+    bot.chat("/register bot112022 bot112022");
+    bot.chat("/login bot112022");
+  }, 3000);
 
   if (jumpInterval) clearInterval(jumpInterval);
 
@@ -51,7 +57,7 @@ bot.on("spawn", () => {
 });
 
 
-// AUTO EQUIP ITEMS
+// AUTO EQUIP
 bot.on("playerCollect", (collector) => {
 
   if (collector !== bot.entity) return;
@@ -87,6 +93,7 @@ function moveToGuardPos() {
   const mcData = require("minecraft-data")(bot.version);
 
   const movements = new Movements(bot, mcData);
+
   bot.pathfinder.setMovements(movements);
 
   bot.pathfinder.setGoal(
@@ -167,7 +174,7 @@ bot.on("error", err => console.log("Error:", err));
 // AUTO RECONNECT
 bot.on("end", () => {
 
-  console.log("Bot disconnected. Reconnecting in 5 seconds...");
+  console.log("Bot disconnected. Reconnecting...");
 
   if (jumpInterval) clearInterval(jumpInterval);
 
@@ -177,4 +184,5 @@ bot.on("end", () => {
 
 }
 
-createBot();
+// start bot after container ready
+setTimeout(createBot, 5000);
