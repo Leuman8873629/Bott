@@ -178,4 +178,4 @@ setTimeout(createBot, 5000);
 }
 
 // start bot after container ready
-setTimeout(createBot, 5000);
+setTimeout(createBot, 30000);
