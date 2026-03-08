@@ -24,7 +24,7 @@ const bot = mineflayer.createBot({
   host: "157.180.102.179",
   port: 29642,
   username: "rioBekasi",
-  version: "1.20.1"
+  version: false // auto detect server version
 });
 
 bot.loadPlugin(pvp);
@@ -33,31 +33,34 @@ bot.loadPlugin(pathfinder);
 
 let jumpInterval;
 
+
 // BOT SPAWN
 bot.on("spawn", () => {
 
   console.log("Bot joined server");
 
-  // auto register / login
+  // login only
   setTimeout(() => {
-    bot.chat("/register bot112022 bot112022");
     bot.chat("/login bot112022");
   }, 3000);
 
   if (jumpInterval) clearInterval(jumpInterval);
 
+  // anti-afk jump (slow)
   jumpInterval = setInterval(() => {
+
     bot.setControlState("jump", true);
 
     setTimeout(() => {
       bot.setControlState("jump", false);
     }, 200);
 
-  }, 400);
+  }, 3000);
+
 });
 
 
-// AUTO EQUIP
+// AUTO EQUIP ITEMS
 bot.on("playerCollect", (collector) => {
 
   if (collector !== bot.entity) return;
@@ -163,7 +166,7 @@ bot.on("chat", (username, message) => {
     stopGuarding();
   }
 
-  // FULL BOT SHUTDOWN COMMAND
+  // FULL BOT SHUTDOWN
   if (username === "YourMinecraftName" && message === "&&stop&&") {
     bot.chat("Shutting down bot...");
     process.exit();
@@ -173,22 +176,28 @@ bot.on("chat", (username, message) => {
 
 
 // ERROR LOGS
-bot.on("kicked", reason => console.log("Kicked:", reason));
-bot.on("error", err => console.log("Error:", err));
+bot.on("kicked", (reason) => {
+  console.log("Bot was kicked:", reason);
+});
+
+bot.on("error", (err) => {
+  console.log("Bot error:", err);
+});
 
 
 // AUTO RECONNECT
 bot.on("end", () => {
 
-  console.log("Bot disconnected. Reconnecting...");
+  console.log("Bot disconnected. Reconnecting in 15 seconds...");
 
   if (jumpInterval) clearInterval(jumpInterval);
 
-  setTimeout(createBot, 5000);
+  setTimeout(createBot, 15000);
 
 });
 
 }
+
 
 // start bot after container ready
 setTimeout(createBot, 5000);
