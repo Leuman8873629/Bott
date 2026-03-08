@@ -40,9 +40,8 @@ console.log("Bot joined server");
 
 // auto register / login
 setTimeout(() => {
-bot.chat("/register bot112022 bot112022");
 bot.chat("/login bot112022");
-}, 3000);
+}, 7000);
 
 if (jumpInterval) clearInterval(jumpInterval);
 
