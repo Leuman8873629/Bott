@@ -7,29 +7,26 @@ const armorManager = require("mineflayer-armor-manager");
 const app = express();
 const PORT = process.env.PORT || 3000;
 
-app.get("/", (req, res) => {
-  res.send("Minecraft Bot Running");
-});
+// Web server (so Railway keeps bot alive)
+app.get("/", (req, res) => res.send("Minecraft Bot Running"));
+app.listen(PORT, "0.0.0.0", () => console.log("Web server running on port " + PORT));
 
-app.listen(PORT, "0.0.0.0", () => {
-  console.log("Web server running on port " + PORT);
-});
-
-let bot; // global bot instance
+let bot = null; // global bot instance
+let reconnecting = false; // prevent multiple reconnects
 
 function createBot() {
 
-  console.log("Starting bot...");
-
-  // close old bot if exists
   if (bot) {
-    try { bot.quit(); } catch {}
+    console.log("Bot already exists, won't create another!");
+    return; // prevents multiple bots
   }
+
+  console.log("Starting bot...");
 
   bot = mineflayer.createBot({
     host: "157.180.102.179",
     port: 29642,
-    username: "sparkyyyboii",
+    username: "sparkyyyboii", // change to a unique bot name
     version: "1.20.1"
   });
 
@@ -46,40 +43,24 @@ function createBot() {
     console.log("Bot joined server");
 
     // login
-    setTimeout(() => {
-      bot.chat("/login bot112022");
-    }, 7000);
+    setTimeout(() => bot.chat("/login bot112022"), 5000);
 
-    if (jumpInterval) clearInterval(jumpInterval);
-
-    // anti AFK (slow)
+    // Anti-AFK jump (slower to avoid TickTimer detection)
     jumpInterval = setInterval(() => {
-
       bot.setControlState("jump", true);
-
-      setTimeout(() => {
-        bot.setControlState("jump", false);
-      }, 120);
-
+      setTimeout(() => bot.setControlState("jump", false), 120);
     }, 10000);
-
   });
 
   // AUTO EQUIP
   bot.on("playerCollect", (collector) => {
-
     if (collector !== bot.entity) return;
-
     setTimeout(() => {
-
       const sword = bot.inventory.items().find(i => i.name.includes("sword"));
-      if (sword) bot.equip(sword, "hand").catch(()=>{});
-
+      if (sword) bot.equip(sword, "hand").catch(() => {});
       const shield = bot.inventory.items().find(i => i.name.includes("shield"));
-      if (shield) bot.equip(shield, "off-hand").catch(()=>{});
-
+      if (shield) bot.equip(shield, "off-hand").catch(() => {});
     }, 300);
-
   });
 
   function guardArea(pos) {
@@ -94,101 +75,58 @@ function createBot() {
   }
 
   function moveToGuardPos() {
-
-    const mcData = require("minecraft-data")(bot.registry.version);
+    if (!guardPos) return;
+    const mcData = require("minecraft-data")(bot.version);
     const movements = new Movements(bot, mcData);
-
     bot.pathfinder.setMovements(movements);
-
-    bot.pathfinder.setGoal(
-      new goals.GoalBlock(
-        guardPos.x,
-        guardPos.y,
-        guardPos.z
-      )
-    );
+    bot.pathfinder.setGoal(new goals.GoalBlock(guardPos.x, guardPos.y, guardPos.z));
   }
 
-  bot.on("stoppedAttacking", () => {
-    if (guardPos) moveToGuardPos();
-  });
+  bot.on("stoppedAttacking", () => { if (guardPos) moveToGuardPos(); });
 
   // LOOK AT ENTITY
   let lookDelay = 0;
-
   bot.on("physicsTick", () => {
-
-    if (!bot.entity) return;
-    if (bot.pvp.target) return;
-    if (bot.pathfinder.isMoving()) return;
-
-    lookDelay++;
-    if (lookDelay < 20) return;
-    lookDelay = 0;
-
+    if (!bot.entity || bot.pvp.target || bot.pathfinder.isMoving()) return;
+    lookDelay++; if (lookDelay < 20) return; lookDelay = 0;
     const entity = bot.nearestEntity();
-
-    if (entity) {
-      bot.lookAt(entity.position.offset(0, entity.height, 0)).catch(()=>{});
-    }
-
+    if (entity) bot.lookAt(entity.position.offset(0, entity.height, 0)).catch(() => {});
   });
 
   // ATTACK MOBS
   bot.on("physicsTick", () => {
-
     if (!guardPos) return;
-
-    const filter = e =>
-      e.type === "mob" &&
-      e.position.distanceTo(bot.entity.position) < 16 &&
-      e.mobType !== "Armor Stand";
-
+    const filter = e => e.type === "mob" && e.position.distanceTo(bot.entity.position) < 16 && e.mobType !== "Armor Stand";
     const entity = bot.nearestEntity(filter);
-
     if (entity) bot.pvp.attack(entity);
-
   });
 
   // CHAT COMMANDS
   bot.on("chat", (username, message) => {
-
     if (username === bot.username) return;
-
     if (message === "guard") {
-
       const player = bot.players[username];
-
-      if (player && player.entity) {
-        bot.chat("I will guard here!");
-        guardArea(player.entity.position);
-      }
-
+      if (player && player.entity) { bot.chat("I will guard here!"); guardArea(player.entity.position); }
     }
-
-    if (message === "stop") {
-      bot.chat("Stopping guard!");
-      stopGuarding();
-    }
-
+    if (message === "stop") { bot.chat("Stopping guard!"); stopGuarding(); }
   });
 
   // LOGS
   bot.on("kicked", reason => console.log("Kicked:", reason));
   bot.on("error", err => console.log("Error:", err));
 
-  // RECONNECT
+  // AUTO RECONNECT (safe: only one reconnect at a time)
   bot.on("end", () => {
-
-    console.log("Bot disconnected. Reconnecting in 60 seconds...");
-
-    if (jumpInterval) clearInterval(jumpInterval);
-
-    setTimeout(createBot, 60000);
-
+    console.log("Bot disconnected.");
+    bot = null; // reset bot reference
+    if (!reconnecting) {
+      reconnecting = true;
+      console.log("Reconnecting in 30 seconds...");
+      setTimeout(() => { reconnecting = false; createBot(); }, 30000);
+    }
   });
 
 }
 
-// start after container ready
-setTimeout(createBot, 20000);
+// START BOT once after container ready
+setTimeout(createBot, 10000);
