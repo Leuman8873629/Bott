@@ -43,8 +43,6 @@ function createBot() {
     console.log("Bot joined server");
 
     // login with longer delay
-    setTimeout(() => bot.chat("/login bot112022"), 8000);
-
     // Anti-AFK jump with randomization (avoids TickTimer detection)
     jumpInterval = setInterval(() => {
       bot.setControlState("jump", true);
