@@ -42,14 +42,14 @@ function createBot() {
 
     console.log("Bot joined server");
 
-    // login
-    setTimeout(() => bot.chat("/login bot112022"), 5000);
+    // login with longer delay
+    setTimeout(() => bot.chat("/login bot112022"), 8000);
 
-    // Anti-AFK jump (slower to avoid TickTimer detection)
+    // Anti-AFK jump with randomization (avoids TickTimer detection)
     jumpInterval = setInterval(() => {
       bot.setControlState("jump", true);
-      setTimeout(() => bot.setControlState("jump", false), 120);
-    }, 10000);
+      setTimeout(() => bot.setControlState("jump", false), Math.random() * 100 + 50);
+    }, Math.random() * 5000 + 8000); // Random 8-13 seconds
   });
 
   // AUTO EQUIP
@@ -111,13 +111,19 @@ function createBot() {
     if (message === "stop") { bot.chat("Stopping guard!"); stopGuarding(); }
   });
 
-  // LOGS
-  bot.on("kicked", reason => console.log("Kicked:", reason));
-  bot.on("error", err => console.log("Error:", err));
+  // BETTER ERROR LOGGING
+  bot.on("kicked", reason => {
+    console.log("Kicked:", reason);
+  });
+  
+  bot.on("error", err => {
+    console.log("Error:", err.message || err);
+  });
 
-  // AUTO RECONNECT (safe: only one reconnect at a time)
+  // AUTO RECONNECT (only if bot crashes/disconnects unexpectedly)
   bot.on("end", () => {
     console.log("Bot disconnected.");
+    clearInterval(jumpInterval); // Clean up the jump interval
     bot = null; // reset bot reference
     if (!reconnecting) {
       reconnecting = true;
