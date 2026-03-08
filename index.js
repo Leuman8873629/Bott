@@ -11,14 +11,14 @@ const PORT = process.env.PORT || 3000;
 app.get("/", (req, res) => res.send("Minecraft Bot Running"));
 app.listen(PORT, "0.0.0.0", () => console.log("Web server running on port " + PORT));
 
-let bot = null; // global bot instance
-let reconnecting = false; // prevent multiple reconnects
+let bot = null;
+let reconnecting = false;
 
 function createBot() {
 
 if (bot) {
 console.log("Bot already exists, won't create another!");
-return; // prevents multiple bots
+return;
 }
 
 console.log("Starting bot...");
@@ -26,7 +26,7 @@ console.log("Starting bot...");
 bot = mineflayer.createBot({
 host: "157.180.102.179",
 port: 29642,
-username: "sparkyyyboii", // change to a unique bot name
+username: "sparkyyyboii",
 version: "1.20.1"
 });
 
@@ -40,15 +40,34 @@ let guardPos = null;
 // SPAWN
 bot.once("spawn", () => {
 
-console.log("Bot joined server");  
+console.log("Bot joined server");
 
-// login with longer delay  
-// Anti-AFK jump with randomization (avoids TickTimer detection)  
-jumpInterval = setInterval(() => {  
-  bot.setControlState("jump", true);  
-  setTimeout(() => bot.setControlState("jump", false), Math.random() * 100 + 50);  
-}, Math.random() * 5000 + 8000); // Random 8-13 seconds
+// Backup auto login after join
+setTimeout(() => {
+bot.chat("/login yourpassword");
+}, 5000);
 
+// Anti-AFK jump
+jumpInterval = setInterval(() => {
+bot.setControlState("jump", true);
+setTimeout(() => bot.setControlState("jump", false), Math.random() * 100 + 50);
+}, Math.random() * 5000 + 8000);
+
+});
+
+// AUTO LOGIN / REGISTER (AuthMe)
+bot.on("message", (jsonMsg) => {
+const msg = jsonMsg.toString().toLowerCase();
+
+if (msg.includes("/register")) {
+console.log("Registering bot...");
+bot.chat("/register yourpassword12 yourpassword12");
+}
+
+if (msg.includes("/login")) {
+console.log("Logging in bot...");
+bot.chat("/login yourpassword12");
+}
 });
 
 // AUTO EQUIP
@@ -81,13 +100,18 @@ bot.pathfinder.setMovements(movements);
 bot.pathfinder.setGoal(new goals.GoalBlock(guardPos.x, guardPos.y, guardPos.z));
 }
 
-bot.on("stoppedAttacking", () => { if (guardPos) moveToGuardPos(); });
+bot.on("stoppedAttacking", () => {
+if (guardPos) moveToGuardPos();
+});
 
 // LOOK AT ENTITY
 let lookDelay = 0;
 bot.on("physicsTick", () => {
 if (!bot.entity || bot.pvp.target || bot.pathfinder.isMoving()) return;
-lookDelay++; if (lookDelay < 20) return; lookDelay = 0;
+lookDelay++;
+if (lookDelay < 20) return;
+lookDelay = 0;
+
 const entity = bot.nearestEntity();
 if (entity) bot.lookAt(entity.position.offset(0, entity.height, 0)).catch(() => {});
 });
@@ -95,22 +119,37 @@ if (entity) bot.lookAt(entity.position.offset(0, entity.height, 0)).catch(() => 
 // ATTACK MOBS
 bot.on("physicsTick", () => {
 if (!guardPos) return;
-const filter = e => e.type === "mob" && e.position.distanceTo(bot.entity.position) < 16 && e.mobType !== "Armor Stand";
+
+const filter = e =>
+e.type === "mob" &&
+e.position.distanceTo(bot.entity.position) < 16 &&
+e.mobType !== "Armor Stand";
+
 const entity = bot.nearestEntity(filter);
 if (entity) bot.pvp.attack(entity);
 });
 
 // CHAT COMMANDS
 bot.on("chat", (username, message) => {
+
 if (username === bot.username) return;
+
 if (message === "guard") {
 const player = bot.players[username];
-if (player && player.entity) { bot.chat("I will guard here!"); guardArea(player.entity.position); }
+if (player && player.entity) {
+bot.chat("I will guard here!");
+guardArea(player.entity.position);
 }
-if (message === "stop") { bot.chat("Stopping guard!"); stopGuarding(); }
+}
+
+if (message === "stop") {
+bot.chat("Stopping guard!");
+stopGuarding();
+}
+
 });
 
-// BETTER ERROR LOGGING
+// ERROR LOGGING
 bot.on("kicked", reason => {
 console.log("Kicked:", reason);
 });
@@ -119,19 +158,27 @@ bot.on("error", err => {
 console.log("Error:", err.message || err);
 });
 
-// AUTO RECONNECT (only if bot crashes/disconnects unexpectedly)
+// AUTO RECONNECT (your long delay kept)
 bot.on("end", () => {
+
 console.log("Bot disconnected.");
-clearInterval(jumpInterval); // Clean up the jump interval
-bot = null; // reset bot reference
+clearInterval(jumpInterval);
+
+bot = null;
+
 if (!reconnecting) {
 reconnecting = true;
-console.log("Reconnecting in 30 seconds...");
-setTimeout(() => { reconnecting = false; createBot(); }, 99999999999);
+console.log("Reconnecting in long delay...");
+
+setTimeout(() => {
+reconnecting = false;
+createBot();
+}, 99999999999);
+
 }
+
 });
 
 }
 
-// Start the bot
 createBot();
