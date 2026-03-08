@@ -11,14 +11,14 @@ const PORT = process.env.PORT || 3000;
 app.get("/", (req, res) => res.send("Minecraft Bot Running"));
 app.listen(PORT, "0.0.0.0", () => console.log("Web server running on port " + PORT));
 
-let bot = null;
-let reconnecting = false;
+let bot = null; // global bot instance
+let reconnecting = false; // prevent multiple reconnects
 
 function createBot() {
 
 if (bot) {
 console.log("Bot already exists, won't create another!");
-return;
+return; // prevents multiple bots
 }
 
 console.log("Starting bot...");
@@ -26,7 +26,7 @@ console.log("Starting bot...");
 bot = mineflayer.createBot({
 host: "157.180.102.179",
 port: 29642,
-username: "sparkyyyboii",
+username: "sparkyyyboii", // change to a unique bot name
 version: "1.20.1"
 });
 
@@ -42,32 +42,23 @@ bot.once("spawn", () => {
 
 console.log("Bot joined server");
 
-// register + login
-setTimeout(() => {
-bot.chat("/register yourpassword yourpassword");
-bot.chat("/login yourpassword");
-}, 3000);
-
-// Anti-AFK jump
+// login with longer delay
+// Anti-AFK jump with randomization (avoids TickTimer detection)
 jumpInterval = setInterval(() => {
 bot.setControlState("jump", true);
 setTimeout(() => bot.setControlState("jump", false), Math.random() * 100 + 50);
-}, Math.random() * 5000 + 8000);
+}, Math.random() * 5000 + 8000); // Random 8-13 seconds
 
 });
 
 // AUTO EQUIP
 bot.on("playerCollect", (collector) => {
 if (collector !== bot.entity) return;
-
 setTimeout(() => {
-
 const sword = bot.inventory.items().find(i => i.name.includes("sword"));
 if (sword) bot.equip(sword, "hand").catch(() => {});
-
 const shield = bot.inventory.items().find(i => i.name.includes("shield"));
 if (shield) bot.equip(shield, "off-hand").catch(() => {});
-
 }, 300);
 });
 
@@ -83,78 +74,43 @@ bot.pathfinder.setGoal(null);
 }
 
 function moveToGuardPos() {
-
 if (!guardPos) return;
-
 const mcData = require("minecraft-data")(bot.version);
 const movements = new Movements(bot, mcData);
-
 bot.pathfinder.setMovements(movements);
 bot.pathfinder.setGoal(new goals.GoalBlock(guardPos.x, guardPos.y, guardPos.z));
-
 }
 
-bot.on("stoppedAttacking", () => {
-if (guardPos) moveToGuardPos();
-});
+bot.on("stoppedAttacking", () => { if (guardPos) moveToGuardPos(); });
 
 // LOOK AT ENTITY
 let lookDelay = 0;
-
 bot.on("physicsTick", () => {
-
 if (!bot.entity || bot.pvp.target || bot.pathfinder.isMoving()) return;
-
-lookDelay++;
-if (lookDelay < 20) return;
-
-lookDelay = 0;
-
+lookDelay++; if (lookDelay < 20) return; lookDelay = 0;
 const entity = bot.nearestEntity();
 if (entity) bot.lookAt(entity.position.offset(0, entity.height, 0)).catch(() => {});
-
 });
 
 // ATTACK MOBS
 bot.on("physicsTick", () => {
-
 if (!guardPos) return;
-
-const filter = e =>
-e.type === "mob" &&
-e.position.distanceTo(bot.entity.position) < 16 &&
-e.mobType !== "Armor Stand";
-
+const filter = e => e.type === "mob" && e.position.distanceTo(bot.entity.position) < 16 && e.mobType !== "Armor Stand";
 const entity = bot.nearestEntity(filter);
-
 if (entity) bot.pvp.attack(entity);
-
 });
 
 // CHAT COMMANDS
 bot.on("chat", (username, message) => {
-
 if (username === bot.username) return;
-
 if (message === "guard") {
-
 const player = bot.players[username];
-
-if (player && player.entity) {
-bot.chat("I will guard here!");
-guardArea(player.entity.position);
+if (player && player.entity) { bot.chat("I will guard here!"); guardArea(player.entity.position); }
 }
-
-}
-
-if (message === "stop") {
-bot.chat("Stopping guard!");
-stopGuarding();
-}
-
+if (message === "stop") { bot.chat("Stopping guard!"); stopGuarding(); }
 });
 
-// ERROR LOGGING
+// BETTER ERROR LOGGING
 bot.on("kicked", reason => {
 console.log("Kicked:", reason);
 });
@@ -163,31 +119,19 @@ bot.on("error", err => {
 console.log("Error:", err.message || err);
 });
 
-// AUTO RECONNECT
+// AUTO RECONNECT (only if bot crashes/disconnects unexpectedly)
 bot.on("end", () => {
-
 console.log("Bot disconnected.");
-
-clearInterval(jumpInterval);
-
-bot = null;
-
+clearInterval(jumpInterval); // Clean up the jump interval
+bot = null; // reset bot reference
 if (!reconnecting) {
-
 reconnecting = true;
-
-console.log("Reconnecting later...");
-
-setTimeout(() => {
-reconnecting = false;
-createBot();
-}, 99999999999);
-
+console.log("Reconnecting in 30 seconds...");
+setTimeout(() => { reconnecting = false; createBot(); }, 99999999999);
 }
-
 });
 
 }
 
-// Start bot
+// Start the bot
 createBot();
