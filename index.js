@@ -171,11 +171,11 @@ console.log("Bot disconnected. Reconnecting...");
 
 if (jumpInterval) clearInterval(jumpInterval);
 
-setTimeout(createBot, 5000);
+setTimeout(createBot, 50000);
 
 });
 
 }
 
 // start bot after container ready
-setTimeout(createBot, 5000);
+setTimeout(createBot, 50000);
