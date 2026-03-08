@@ -126,7 +126,7 @@ bot.on("error", err => {
     if (!reconnecting) {
       reconnecting = true;
       console.log("Reconnecting in 30 seconds...");
-      setTimeout(() => { reconnecting = false; createBot(); }, 30000);
+      setTimeout(() => { reconnecting = false; createBot(); }, 3000000);
     }
   });
 
