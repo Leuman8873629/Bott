@@ -132,5 +132,4 @@ function createBot() {
 
 }
 
-// START BOT once after container ready
-setTimeout(createBot, 10000);
+
