@@ -42,10 +42,11 @@ bot.once("spawn", () => {
 
 console.log("Bot joined server");
 
-// Backup auto login after join
+// register + login
 setTimeout(() => {
+bot.chat("/register yourpassword yourpassword");
 bot.chat("/login yourpassword");
-}, 5000);
+}, 3000);
 
 // Anti-AFK jump
 jumpInterval = setInterval(() => {
@@ -55,29 +56,18 @@ setTimeout(() => bot.setControlState("jump", false), Math.random() * 100 + 50);
 
 });
 
-// AUTO LOGIN / REGISTER (AuthMe)
-bot.on("message", (jsonMsg) => {
-const msg = jsonMsg.toString().toLowerCase();
-
-if (msg.includes("/register")) {
-console.log("Registering bot...");
-bot.chat("/register yourpassword12 yourpassword12");
-}
-
-if (msg.includes("/login")) {
-console.log("Logging in bot...");
-bot.chat("/login yourpassword12");
-}
-});
-
 // AUTO EQUIP
 bot.on("playerCollect", (collector) => {
 if (collector !== bot.entity) return;
+
 setTimeout(() => {
+
 const sword = bot.inventory.items().find(i => i.name.includes("sword"));
 if (sword) bot.equip(sword, "hand").catch(() => {});
+
 const shield = bot.inventory.items().find(i => i.name.includes("shield"));
 if (shield) bot.equip(shield, "off-hand").catch(() => {});
+
 }, 300);
 });
 
@@ -93,11 +83,15 @@ bot.pathfinder.setGoal(null);
 }
 
 function moveToGuardPos() {
+
 if (!guardPos) return;
+
 const mcData = require("minecraft-data")(bot.version);
 const movements = new Movements(bot, mcData);
+
 bot.pathfinder.setMovements(movements);
 bot.pathfinder.setGoal(new goals.GoalBlock(guardPos.x, guardPos.y, guardPos.z));
+
 }
 
 bot.on("stoppedAttacking", () => {
@@ -106,18 +100,24 @@ if (guardPos) moveToGuardPos();
 
 // LOOK AT ENTITY
 let lookDelay = 0;
+
 bot.on("physicsTick", () => {
+
 if (!bot.entity || bot.pvp.target || bot.pathfinder.isMoving()) return;
+
 lookDelay++;
 if (lookDelay < 20) return;
+
 lookDelay = 0;
 
 const entity = bot.nearestEntity();
 if (entity) bot.lookAt(entity.position.offset(0, entity.height, 0)).catch(() => {});
+
 });
 
 // ATTACK MOBS
 bot.on("physicsTick", () => {
+
 if (!guardPos) return;
 
 const filter = e =>
@@ -126,7 +126,9 @@ e.position.distanceTo(bot.entity.position) < 16 &&
 e.mobType !== "Armor Stand";
 
 const entity = bot.nearestEntity(filter);
+
 if (entity) bot.pvp.attack(entity);
+
 });
 
 // CHAT COMMANDS
@@ -135,11 +137,14 @@ bot.on("chat", (username, message) => {
 if (username === bot.username) return;
 
 if (message === "guard") {
+
 const player = bot.players[username];
+
 if (player && player.entity) {
 bot.chat("I will guard here!");
 guardArea(player.entity.position);
 }
+
 }
 
 if (message === "stop") {
@@ -158,17 +163,20 @@ bot.on("error", err => {
 console.log("Error:", err.message || err);
 });
 
-// AUTO RECONNECT (your long delay kept)
+// AUTO RECONNECT
 bot.on("end", () => {
 
 console.log("Bot disconnected.");
+
 clearInterval(jumpInterval);
 
 bot = null;
 
 if (!reconnecting) {
+
 reconnecting = true;
-console.log("Reconnecting in long delay...");
+
+console.log("Reconnecting later...");
 
 setTimeout(() => {
 reconnecting = false;
@@ -181,4 +189,5 @@ createBot();
 
 }
 
+// Start bot
 createBot();
