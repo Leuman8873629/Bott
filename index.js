@@ -163,6 +163,12 @@ bot.on("chat", (username, message) => {
     stopGuarding();
   }
 
+  // FULL BOT SHUTDOWN COMMAND
+  if (username === "YourMinecraftName" && message === "&&stop&&") {
+    bot.chat("Shutting down bot...");
+    process.exit();
+  }
+
 });
 
 
