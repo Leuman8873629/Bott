@@ -1,95 +1,119 @@
-const express = require("express");
-const http = require("http");
-const mineflayer = require('mineflayer')
-const pvp = require('mineflayer-pvp').plugin
-const { pathfinder, Movements, goals } = require('mineflayer-pathfinder')
-const armorManager = require('mineflayer-armor-manager')
-const AutoAuth = require('mineflayer-auto-auth');
-const app = express();
+const express = require("express")
+const http = require("http")
+const mineflayer = require("mineflayer")
+const pvp = require("mineflayer-pvp").plugin
+const { pathfinder, Movements, goals } = require("mineflayer-pathfinder")
+const armorManager = require("mineflayer-armor-manager")
+const AutoAuth = require("mineflayer-auto-auth")
 
-app.use(express.json());
+const app = express()
 
-app.get("/", (_, res) => res.send("Bot is running"));
-app.listen(process.env.PORT || 3000);
+app.get("/", (_, res) => res.send("Bot is running"))
+app.listen(process.env.PORT || 3000)
 
+// keep repl alive
 setInterval(() => {
 if (process.env.PROJECT_DOMAIN) {
-http.get(http://${process.env.PROJECT_DOMAIN}.repl.co/);
+http.get(`http://${process.env.PROJECT_DOMAIN}.repl.co/`)
 }
-}, 224000);
+}, 224000)
 
-// BOT FUNCTION
-function createBot () {
+function createBot() {
 
 const bot = mineflayer.createBot({
-host: '157.180.102.179',
+host: "157.180.102.179",
 port: 29642,
-username: 'rioBekasi',
+username: "rioBekasi",
 version: false,
 plugins: [AutoAuth],
-AutoAuth: 'bot112022'
+AutoAuth: "bot112022"
 })
 
 bot.loadPlugin(pvp)
 bot.loadPlugin(armorManager)
 bot.loadPlugin(pathfinder)
 
-let jumpInterval
+let guardPos = null
 
-// ALWAYS JUMP
-bot.on('spawn', () => {
+// SPAWN
+bot.once("spawn", () => {
 
 console.log("Bot joined server")
 
-if (jumpInterval) clearInterval(jumpInterval)
-
-jumpInterval = setInterval(() => {
-bot.setControlState('jump', true)
-setTimeout(() => bot.setControlState('jump', false), 200)
-}, 400)
+startAntiAFK()
 
 })
 
-// AUTO EQUIP SWORD
-bot.on('playerCollect', (collector) => {
+
+// HUMAN LIKE ANTI AFK
+function startAntiAFK() {
+
+function randomJump() {
+
+const delay = Math.floor(Math.random() * 5000) + 8000
+
+setTimeout(() => {
+
+bot.setControlState("jump", true)
+
+setTimeout(() => {
+bot.setControlState("jump", false)
+}, 120)
+
+randomJump()
+
+}, delay)
+
+}
+
+randomJump()
+
+}
+
+
+// AUTO EQUIP
+bot.on("playerCollect", (collector) => {
+
 if (collector !== bot.entity) return
 
 setTimeout(() => {
-const sword = bot.inventory.items().find(item => item.name.includes('sword'))
-if (sword) bot.equip(sword, 'hand')
-}, 150)
-})
 
-// AUTO EQUIP SHIELD
-bot.on('playerCollect', (collector) => {
-if (collector !== bot.entity) return
+const sword = bot.inventory.items().find(i => i.name.includes("sword"))
+if (sword) bot.equip(sword, "hand").catch(()=>{})
 
-setTimeout(() => {
-const shield = bot.inventory.items().find(item => item.name.includes('shield'))
-if (shield) bot.equip(shield, 'off-hand')
+const shield = bot.inventory.items().find(i => i.name.includes("shield"))
+if (shield) bot.equip(shield, "off-hand").catch(()=>{})
+
 }, 250)
+
 })
 
-let guardPos = null
 
-function guardArea (pos) {
+// GUARD SYSTEM
+function guardArea(pos) {
+
 guardPos = pos.clone()
 
-if (!bot.pvp.target) {
-moveToGuardPos()
-}
+if (!bot.pvp.target) moveToGuardPos()
+
 }
 
-function stopGuarding () {
+function stopGuarding() {
+
 guardPos = null
 bot.pvp.stop()
 bot.pathfinder.setGoal(null)
+
 }
 
-function moveToGuardPos () {
-const mcData = require('minecraft-data')(bot.version)
+function moveToGuardPos() {
 
-bot.pathfinder.setMovements(new Movements(bot, mcData))
+if (!guardPos) return
+
+const mcData = require("minecraft-data")(bot.registry.version)
+const movements = new Movements(bot, mcData)
+
+bot.pathfinder.setMovements(movements)
 
 bot.pathfinder.setGoal(
 new goals.GoalBlock(
@@ -98,77 +122,90 @@ guardPos.y,
 guardPos.z
 )
 )
+
 }
 
-bot.on('stoppedAttacking', () => {
-if (guardPos) {
-moveToGuardPos()
-}
+bot.on("stoppedAttacking", () => {
+if (guardPos) moveToGuardPos()
 })
 
-// LOOK AT NEAREST ENTITY
-bot.on('physicTick', () => {
 
+// LOOK AT ENTITY
+let lookDelay = 0
+
+bot.on("physicsTick", () => {
+
+if (!bot.entity) return
 if (bot.pvp.target) return
 if (bot.pathfinder.isMoving()) return
+
+lookDelay++
+
+if (lookDelay < 20) return
+lookDelay = 0
 
 const entity = bot.nearestEntity()
 
 if (entity) {
-bot.lookAt(entity.position.offset(0, entity.height, 0))
+bot.lookAt(entity.position.offset(0, entity.height, 0)).catch(()=>{})
 }
 
 })
 
-// ATTACK MOBS NEAR GUARD AREA
-bot.on('physicTick', () => {
+
+// ATTACK MOBS
+bot.on("physicsTick", () => {
 
 if (!guardPos) return
 
 const filter = e =>
-e.type === 'mob' &&
+e.type === "mob" &&
 e.position.distanceTo(bot.entity.position) < 16 &&
-e.mobType !== 'Armor Stand'
+e.mobType !== "Armor Stand"
 
 const entity = bot.nearestEntity(filter)
 
-if (entity) {
-bot.pvp.attack(entity)
-}
+if (entity) bot.pvp.attack(entity)
 
 })
 
+
 // CHAT COMMANDS
-bot.on('chat', (username, message) => {
+bot.on("chat", (username, message) => {
 
 if (username === bot.username) return
 
-if (message === 'guard') {
+if (message === "guard") {
 
-const player = bot.players[username]  
+const player = bot.players[username]
 
-if (player && player.entity) {  
-  bot.chat('I will guard here!')  
-  guardArea(player.entity.position)  
+if (player && player.entity) {
+bot.chat("I will guard here!")
+guardArea(player.entity.position)
 }
 
 }
 
-if (message === 'stop') {
-bot.chat('Stopping guard!')
+if (message === "stop") {
+bot.chat("Stopping guard!")
 stopGuarding()
 }
 
 })
 
-// ERROR LOGGING
-bot.on('kicked', console.log)
-bot.on('error', console.log)
 
-// AUTO RECONNECT
-bot.on('end', () => {
-console.log("Bot disconnected. Reconnecting in 5 seconds...")
-setTimeout(createBot, 5000)
+// LOGGING
+bot.on("kicked", console.log)
+bot.on("error", console.log)
+
+
+// RECONNECT
+bot.on("end", () => {
+
+console.log("Bot disconnected. Reconnecting in 30 seconds...")
+
+setTimeout(createBot, 30000)
+
 })
 
 }
