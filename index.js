@@ -114,7 +114,7 @@ function createBot() {
     console.log("Kicked:", reason);
   });
   
-  bot.on("error", err => {
+bot.on("error", err => {
     console.log("Error:", err.message || err);
   });
 
@@ -132,4 +132,5 @@ function createBot() {
 
 }
 
-
+// Start the bot
+createBot();
