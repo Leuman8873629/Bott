@@ -30,11 +30,10 @@ bot.loadPlugin(pvp);
 bot.loadPlugin(armorManager);
 bot.loadPlugin(pathfinder);
 
-let jumpInterval;
 let guardPos = null;
 
 
-// BOT SPAWN
+// SPAWN
 bot.once("spawn", () => {
 
   console.log("Bot joined server");
@@ -43,19 +42,29 @@ bot.once("spawn", () => {
     bot.chat("/login bot112022");
   }, 5000);
 
-  if (jumpInterval) clearInterval(jumpInterval);
+  randomJump();
 
-  jumpInterval = setInterval(() => {
+});
+
+
+// HUMAN LIKE ANTI AFK
+function randomJump() {
+
+  const delay = Math.floor(Math.random() * 5000) + 8000;
+
+  setTimeout(() => {
 
     bot.setControlState("jump", true);
 
     setTimeout(() => {
       bot.setControlState("jump", false);
-    }, 200);
+    }, 120);
 
-  }, 4000);
+    randomJump();
 
-});
+  }, delay);
+
+}
 
 
 // AUTO EQUIP
@@ -76,6 +85,7 @@ bot.on("playerCollect", (collector) => {
 });
 
 
+// GUARD SYSTEM
 function guardArea(pos) {
   guardPos = pos.clone();
   if (!bot.pvp.target) moveToGuardPos();
@@ -91,7 +101,7 @@ function moveToGuardPos() {
 
   if (!guardPos) return;
 
-  const mcData = require("minecraft-data")(bot.version);
+  const mcData = require("minecraft-data")(bot.registry.version);
   const movements = new Movements(bot, mcData);
 
   bot.pathfinder.setMovements(movements);
@@ -105,18 +115,24 @@ function moveToGuardPos() {
   );
 }
 
-
 bot.on("stoppedAttacking", () => {
   if (guardPos) moveToGuardPos();
 });
 
 
-// LOOK AT ENTITY
+// LOOK AT ENTITY (SLOWER)
+let lookCooldown = 0;
+
 bot.on("physicsTick", () => {
 
   if (!bot.entity) return;
   if (bot.pvp.target) return;
   if (bot.pathfinder.isMoving()) return;
+
+  lookCooldown++;
+
+  if (lookCooldown < 20) return;
+  lookCooldown = 0;
 
   const entity = bot.nearestEntity();
 
@@ -165,7 +181,7 @@ bot.on("chat", (username, message) => {
     stopGuarding();
   }
 
-  if (username === "YourMinecraftName" && message === "&&stop&&") {
+  if (username === ".SickBike5732" && message === "&&stop&&") {
     bot.chat("Shutting down...");
     process.exit();
   }
@@ -173,7 +189,7 @@ bot.on("chat", (username, message) => {
 });
 
 
-// LOGS
+// LOGGING
 bot.on("kicked", (reason) => {
   console.log("Bot was kicked:", reason);
 });
@@ -187,8 +203,6 @@ bot.on("error", (err) => {
 bot.on("end", () => {
 
   console.log("Bot disconnected. Reconnecting in 30 seconds...");
-
-  if (jumpInterval) clearInterval(jumpInterval);
 
   setTimeout(createBot, 30000);
 
