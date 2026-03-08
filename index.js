@@ -1,160 +1,132 @@
 const express = require("express");
-const http = require("http");
-const mineflayer = require('mineflayer')
-const pvp = require('mineflayer-pvp').plugin
-const { pathfinder, Movements, goals } = require('mineflayer-pathfinder')
-const armorManager = require('mineflayer-armor-manager')
-const mc = require('minecraft-protocol');
-const AutoAuth = require('mineflayer-auto-auth');
+const mineflayer = require("mineflayer");
+const pvp = require("mineflayer-pvp").plugin;
+const { pathfinder, Movements, goals } = require("mineflayer-pathfinder");
+const armorManager = require("mineflayer-armor-manager");
+
 const app = express();
+const PORT = process.env.PORT || 3000;
 
-app.use(express.json());
+// Web server (so Railway keeps bot alive)
+app.get("/", (req, res) => res.send("Minecraft Bot Running"));
+app.listen(PORT, "0.0.0.0", () => console.log("Web server running on port " + PORT));
 
-app.get("/", (_, res) => res.sendFile(__dirname + "/index.html"));
-app.listen(process.env.PORT);
+let bot = null; // global bot instance
+let reconnecting = false; // prevent multiple reconnects
 
-setInterval(() => {
-  http.get(`http://${process.env.PROJECT_DOMAIN}.repl.co/`);
-}, 224000);
+function createBot() {
 
+  if (bot) {
+    console.log("Bot already exists, won't create another!");
+    return; // prevents multiple bots
+  }
 
-// U CAN ONLY EDIT THIS SECTION!!
-function createBot () {
+  console.log("Starting bot...");
 
-const bot = mineflayer.createBot({
-  host: '157.180.102.179',
-  version: false,
-  username:'rioBekasi',
-  port: 29642,
-  plugins: [AutoAuth],
-  AutoAuth: 'bot112022'
-})
+  bot = mineflayer.createBot({
+    host: "157.180.102.179",
+    port: 29642,
+    username: "sparkyyyboii", // change to a unique bot name
+    version: "1.20.1"
+  });
 
-/// DONT TOUCH ANYTHING MORE!
-bot.loadPlugin(pvp)
-bot.loadPlugin(armorManager)
-bot.loadPlugin(pathfinder)
+  bot.loadPlugin(pvp);
+  bot.loadPlugin(armorManager);
+  bot.loadPlugin(pathfinder);
 
+  let jumpInterval;
+  let guardPos = null;
 
-// BOT SPAWN
-bot.once('spawn', () => {
-  console.log("Bot joined the server")
+  // SPAWN
+  bot.once("spawn", () => {
 
-  // Anti-AFK jumping
-  setInterval(() => {
-    bot.setControlState('jump', true)
+    console.log("Bot joined server");
 
+    // login
+    setTimeout(() => bot.chat("/login bot112022"), 5000);
+
+    // Anti-AFK jump (slower to avoid TickTimer detection)
+    jumpInterval = setInterval(() => {
+      bot.setControlState("jump", true);
+      setTimeout(() => bot.setControlState("jump", false), 120);
+    }, 10000);
+  });
+
+  // AUTO EQUIP
+  bot.on("playerCollect", (collector) => {
+    if (collector !== bot.entity) return;
     setTimeout(() => {
-      bot.setControlState('jump', false)
-    }, 200)
+      const sword = bot.inventory.items().find(i => i.name.includes("sword"));
+      if (sword) bot.equip(sword, "hand").catch(() => {});
+      const shield = bot.inventory.items().find(i => i.name.includes("shield"));
+      if (shield) bot.equip(shield, "off-hand").catch(() => {});
+    }, 300);
+  });
 
-  }, 10000) // jump every 10 seconds
-})
-
-
-// AUTO EQUIP SWORD
-bot.on('playerCollect', (collector, itemDrop) => {
-  if (collector !== bot.entity) return
-
-  setTimeout(() => {
-    const sword = bot.inventory.items().find(item => item.name.includes('sword'))
-    if (sword) bot.equip(sword, 'hand')
-  }, 150)
-})
-
-
-// AUTO EQUIP SHIELD
-bot.on('playerCollect', (collector, itemDrop) => {
-  if (collector !== bot.entity) return
-
-  setTimeout(() => {
-    const shield = bot.inventory.items().find(item => item.name.includes('shield'))
-    if (shield) bot.equip(shield, 'off-hand')
-  }, 250)
-})
-
-let guardPos = null
-
-function guardArea (pos) {
-  guardPos = pos.clone()
-
-  if (!bot.pvp.target) {
-    moveToGuardPos()
+  function guardArea(pos) {
+    guardPos = pos.clone();
+    if (!bot.pvp.target) moveToGuardPos();
   }
-}
 
-function stopGuarding () {
-  guardPos = null
-  bot.pvp.stop()
-  bot.pathfinder.setGoal(null)
-}
-
-function moveToGuardPos () {
-  const mcData = require('minecraft-data')(bot.version)
-  bot.pathfinder.setMovements(new Movements(bot, mcData))
-  bot.pathfinder.setGoal(new goals.GoalBlock(guardPos.x, guardPos.y, guardPos.z))
-}
-
-bot.on('stoppedAttacking', () => {
-  if (guardPos) {
-    moveToGuardPos()
+  function stopGuarding() {
+    guardPos = null;
+    bot.pvp.stop();
+    bot.pathfinder.setGoal(null);
   }
-})
 
-
-// LOOK AT ENTITY
-bot.on('physicsTick', () => {
-  if (bot.pvp.target) return
-  if (bot.pathfinder.isMoving()) return
-
-  const entity = bot.nearestEntity()
-  if (entity) bot.lookAt(entity.position.offset(0, entity.height, 0))
-})
-
-
-// ATTACK MOBS
-bot.on('physicsTick', () => {
-  if (!guardPos) return
-
-  const filter = e =>
-    e.type === 'mob' &&
-    e.position.distanceTo(bot.entity.position) < 16 &&
-    e.mobType !== 'Armor Stand'
-
-  const entity = bot.nearestEntity(filter)
-
-  if (entity) {
-    bot.pvp.attack(entity)
+  function moveToGuardPos() {
+    if (!guardPos) return;
+    const mcData = require("minecraft-data")(bot.version);
+    const movements = new Movements(bot, mcData);
+    bot.pathfinder.setMovements(movements);
+    bot.pathfinder.setGoal(new goals.GoalBlock(guardPos.x, guardPos.y, guardPos.z));
   }
-})
 
+  bot.on("stoppedAttacking", () => { if (guardPos) moveToGuardPos(); });
 
-// CHAT COMMANDS
-bot.on('chat', (username, message) => {
+  // LOOK AT ENTITY
+  let lookDelay = 0;
+  bot.on("physicsTick", () => {
+    if (!bot.entity || bot.pvp.target || bot.pathfinder.isMoving()) return;
+    lookDelay++; if (lookDelay < 20) return; lookDelay = 0;
+    const entity = bot.nearestEntity();
+    if (entity) bot.lookAt(entity.position.offset(0, entity.height, 0)).catch(() => {});
+  });
 
-  if (message === 'guard') {
+  // ATTACK MOBS
+  bot.on("physicsTick", () => {
+    if (!guardPos) return;
+    const filter = e => e.type === "mob" && e.position.distanceTo(bot.entity.position) < 16 && e.mobType !== "Armor Stand";
+    const entity = bot.nearestEntity(filter);
+    if (entity) bot.pvp.attack(entity);
+  });
 
-    const player = bot.players[username]
-
-    if (player && player.entity) {
-      bot.chat('I will!')
-      guardArea(player.entity.position)
+  // CHAT COMMANDS
+  bot.on("chat", (username, message) => {
+    if (username === bot.username) return;
+    if (message === "guard") {
+      const player = bot.players[username];
+      if (player && player.entity) { bot.chat("I will guard here!"); guardArea(player.entity.position); }
     }
+    if (message === "stop") { bot.chat("Stopping guard!"); stopGuarding(); }
+  });
 
-  }
+  // LOGS
+  bot.on("kicked", reason => console.log("Kicked:", reason));
+  bot.on("error", err => console.log("Error:", err));
 
-  if (message === 'stop') {
-    bot.chat('I will stop!')
-    stopGuarding()
-  }
-
-})
-
-
-bot.on('kicked', console.log)
-bot.on('error', console.log)
-bot.on('end', createBot)
+  // AUTO RECONNECT (safe: only one reconnect at a time)
+  bot.on("end", () => {
+    console.log("Bot disconnected.");
+    bot = null; // reset bot reference
+    if (!reconnecting) {
+      reconnecting = true;
+      console.log("Reconnecting in 30 seconds...");
+      setTimeout(() => { reconnecting = false; createBot(); }, 30000);
+    }
+  });
 
 }
 
-createBot()
+// START BOT once after container ready
+setTimeout(createBot, 10000);
