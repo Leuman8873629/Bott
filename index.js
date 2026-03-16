@@ -15,13 +15,8 @@ app.listen(PORT, "0.0.0.0", () =>
 
 let bot = null;
 let jumpInterval = null;
-let reconnecting = false;
 
 function createBot() {
-  if (bot) {
-    console.log("Bot already running.");
-    return;
-  }
 
   console.log("Starting bot...");
 
@@ -38,13 +33,8 @@ function createBot() {
 
   let guardPos = null;
 
-  // SPAWN
   bot.once("spawn", () => {
     console.log("Bot joined server");
-
-    setTimeout(() => {
-      // bot.chat("/login password");
-    }, 5000);
 
     // Anti AFK
     jumpInterval = setInterval(() => {
@@ -61,14 +51,10 @@ function createBot() {
     if (collector !== bot.entity) return;
 
     setTimeout(() => {
-      const sword = bot.inventory.items().find(i =>
-        i.name.includes("sword")
-      );
+      const sword = bot.inventory.items().find(i => i.name.includes("sword"));
       if (sword) bot.equip(sword, "hand").catch(() => {});
 
-      const shield = bot.inventory.items().find(i =>
-        i.name.includes("shield")
-      );
+      const shield = bot.inventory.items().find(i => i.name.includes("shield"));
       if (shield) bot.equip(shield, "off-hand").catch(() => {});
     }, 300);
   });
@@ -106,9 +92,7 @@ function createBot() {
 
     const entity = bot.nearestEntity();
     if (entity) {
-      bot.lookAt(
-        entity.position.offset(0, entity.height, 0)
-      ).catch(() => {});
+      bot.lookAt(entity.position.offset(0, entity.height, 0)).catch(() => {});
     }
   });
 
@@ -145,7 +129,6 @@ function createBot() {
     }
   });
 
-  // ERROR LOGGING
   bot.on("kicked", (reason) => {
     console.log("Kicked:", reason);
   });
@@ -154,31 +137,13 @@ function createBot() {
     console.log("Error:", err.message);
   });
 
-  // RECONNECT
   bot.on("end", () => {
     console.log("Bot disconnected");
-
-    if (jumpInterval) {
-      clearInterval(jumpInterval);
-      jumpInterval = null;
-    }
-
-    bot = null;
-
-    if (!reconnecting) {
-      reconnecting = true;
-
-      console.log("Reconnecting in 30 seconds...");
-
-      setTimeout(() => {
-        reconnecting = false;
-        createBot();
-      }, 99999999999999);
-    }
+    if (jumpInterval) clearInterval(jumpInterval);
   });
+
 }
 
-// Prevent crashes
 process.on("uncaughtException", (err) => {
   console.log("Uncaught Error:", err);
 });
