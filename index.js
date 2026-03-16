@@ -39,10 +39,12 @@ function createBot() {
     // Anti AFK
     jumpInterval = setInterval(() => {
       if (!bot) return;
+
       bot.setControlState("jump", true);
       setTimeout(() => {
         if (bot) bot.setControlState("jump", false);
       }, 100);
+
     }, 10000);
   });
 
@@ -51,11 +53,13 @@ function createBot() {
     if (collector !== bot.entity) return;
 
     setTimeout(() => {
+
       const sword = bot.inventory.items().find(i => i.name.includes("sword"));
       if (sword) bot.equip(sword, "hand").catch(() => {});
 
       const shield = bot.inventory.items().find(i => i.name.includes("shield"));
       if (shield) bot.equip(shield, "off-hand").catch(() => {});
+
     }, 300);
   });
 
@@ -71,6 +75,7 @@ function createBot() {
   }
 
   function moveToGuardPos() {
+
     if (!guardPos) return;
 
     const mcData = require("minecraft-data")(bot.version);
@@ -86,35 +91,45 @@ function createBot() {
     if (guardPos) moveToGuardPos();
   });
 
-  // LOOK AT ENTITY
+  // MAIN AI LOOP
   bot.on("physicsTick", () => {
-    if (!bot.entity || bot.pvp.target || bot.pathfinder.isMoving()) return;
 
-    const entity = bot.nearestEntity();
-    if (entity) {
-      bot.lookAt(entity.position.offset(0, entity.height, 0)).catch(() => {});
+    if (!bot.entity) return;
+
+    // Look at nearest entity
+    if (!bot.pvp.target && !bot.pathfinder.isMoving()) {
+
+      const entity = bot.nearestEntity();
+
+      if (entity) {
+        bot.lookAt(
+          entity.position.offset(0, entity.height, 0)
+        ).catch(() => {});
+      }
     }
-  });
 
-  // ATTACK MOBS
-  bot.on("physicsTick", () => {
-    if (!guardPos) return;
+    // Attack mobs if guarding
+    if (guardPos) {
 
-    const filter = (e) =>
-      e.type === "mob" &&
-      e.position.distanceTo(bot.entity.position) < 16 &&
-      e.mobType !== "Armor Stand";
+      const filter = (e) =>
+        e.type === "mob" &&
+        e.position.distanceTo(bot.entity.position) < 16 &&
+        e.mobType !== "Armor Stand";
 
-    const entity = bot.nearestEntity(filter);
+      const mob = bot.nearestEntity(filter);
 
-    if (entity) bot.pvp.attack(entity);
+      if (mob) bot.pvp.attack(mob);
+    }
+
   });
 
   // CHAT COMMANDS
   bot.on("chat", (username, message) => {
+
     if (username === bot.username) return;
 
     if (message === "guard") {
+
       const player = bot.players[username];
 
       if (player && player.entity) {
@@ -127,6 +142,7 @@ function createBot() {
       bot.chat("Stopping guard!");
       stopGuarding();
     }
+
   });
 
   bot.on("kicked", (reason) => {
@@ -139,7 +155,11 @@ function createBot() {
 
   bot.on("end", () => {
     console.log("Bot disconnected");
-    if (jumpInterval) clearInterval(jumpInterval);
+
+    if (jumpInterval) {
+      clearInterval(jumpInterval);
+      jumpInterval = null;
+    }
   });
 
 }
