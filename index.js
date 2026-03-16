@@ -23,7 +23,7 @@ function createBot() {
   bot = mineflayer.createBot({
     host: "Tomanreturns.aternos.me",
     port: 37089,
-    username: "chatpata_golgappa",
+    username: "chatpata_momo",
     version: "1.20.1"
   });
 
