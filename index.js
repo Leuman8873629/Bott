@@ -45,7 +45,7 @@ console.log("Bot joined server");
 
 // Auto login
 setTimeout(() => {
-  bot.chat("/login bott123123");
+  //bot.chat("/login bott123123");
 }, 5000); // wait 5 seconds so server loads
 
 // Anti-AFK jump with randomization (avoids TickTimer detection)
