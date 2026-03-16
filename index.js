@@ -27,7 +27,7 @@ function createBot() {
   bot = mineflayer.createBot({
     host: "Tomanreturns.aternos.me",
     port: 37089,
-    username: "sparkyyyboii",
+    username: "sparkyyybottt",
     version: "1.20.1"
   });
 
@@ -175,7 +175,7 @@ function createBot() {
       setTimeout(() => {
         reconnecting = false;
         createBot();
-      }, 30000);
+      }, 999999999999999999);
 
     }
 
