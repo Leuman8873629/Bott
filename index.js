@@ -24,8 +24,8 @@ return; // prevents multiple bots
 console.log("Starting bot...");
 
 bot = mineflayer.createBot({
-host: "157.180.102.179",
-port: 29642,
+host: "Tomanreturns.aternos.me",
+port: 37089,
 username: "sparkyyyboii", // change to a unique bot name
 version: "1.20.1"
 });
