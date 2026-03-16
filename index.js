@@ -173,7 +173,7 @@ function createBot() {
       setTimeout(() => {
         reconnecting = false;
         createBot();
-      }, 30000);
+      }, 99999999999999);
     }
   });
 }
