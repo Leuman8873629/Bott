@@ -37,6 +37,11 @@ function createBot() {
   bot.once("spawn", () => {
     console.log("Bot joined server");
 
+    // Auto login after join
+    setTimeout(() => {
+      bot.chat("/login botwa123123");
+    }, 3000);
+
     // Anti AFK
     jumpInterval = setInterval(() => {
       if (!bot?.entity) return;
@@ -45,6 +50,17 @@ function createBot() {
       setTimeout(() => bot.setControlState("jump", false), 120);
 
     }, 10000);
+  });
+
+  // Auto login if server asks
+  bot.on("message", (msg) => {
+    const text = msg.toString();
+
+    if (text.toLowerCase().includes("login")) {
+      setTimeout(() => {
+        bot.chat("/register botwa123123 botwa123123");
+      }, 1000);
+    }
   });
 
   // Auto equip sword + shield
