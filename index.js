@@ -10,9 +10,9 @@ const PORT = process.env.PORT || 3000;
 
 // Keep Railway service alive
 app.get("/", (req, res) => res.send("Minecraft Bot Running"));
-app.listen(PORT, "0.0.0.0", () =>
-  console.log("Web server running on port " + PORT)
-);
+app.listen(PORT, "0.0.0.0", () => {
+  console.log("Web server running on port " + PORT);
+});
 
 let bot;
 let jumpInterval;
@@ -37,7 +37,7 @@ function createBot() {
   bot.once("spawn", () => {
     console.log("Bot joined server");
 
-    // Auto login after join
+    // Try login after join
     setTimeout(() => {
       bot.chat("/login botwa123123");
     }, 3000);
@@ -52,18 +52,24 @@ function createBot() {
     }, 10000);
   });
 
-  // Auto login if server asks
+  // Detect register/login messages
   bot.on("message", (msg) => {
-    const text = msg.toString();
+    const text = msg.toString().toLowerCase();
 
-    if (text.toLowerCase().includes("login")) {
+    if (text.includes("register")) {
       setTimeout(() => {
         bot.chat("/register botwa123123 botwa123123");
       }, 1000);
     }
+
+    if (text.includes("login")) {
+      setTimeout(() => {
+        bot.chat("/login botwa123123");
+      }, 1000);
+    }
   });
 
-  // Auto equip sword + shield
+  // Auto equip sword and shield
   bot.on("playerCollect", (collector) => {
     if (collector !== bot.entity) return;
 
@@ -102,22 +108,17 @@ function createBot() {
     if (guardPos) moveToGuardPos();
   });
 
-  // Main AI loop
+  // AI loop
   bot.on("physicsTick", () => {
     if (!bot?.entity) return;
 
-    // Look at nearby entity
     if (!bot.pvp.target && !bot.pathfinder.isMoving()) {
       const entity = bot.nearestEntity();
       if (entity) {
-        bot.lookAt(
-          entity.position.offset(0, entity.height, 0),
-          true
-        ).catch(() => {});
+        bot.lookAt(entity.position.offset(0, entity.height, 0), true).catch(() => {});
       }
     }
 
-    // Attack mobs if guarding
     if (guardPos) {
       const mob = bot.nearestEntity(e =>
         e.type === "mob" &&
