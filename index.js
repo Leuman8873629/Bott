@@ -24,7 +24,7 @@ function createBot() {
     host: "Tomanreturns.aternos.me",
     port: 37089,
     username: "chatpata_momo",
-    version: "1.20.1"
+    version: "1.21.11"
   });
 
   bot.loadPlugin(pvp);
