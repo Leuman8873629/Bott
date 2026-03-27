@@ -17,6 +17,10 @@ app.listen(PORT, "0.0.0.0", () => {
 let bot;
 let jumpInterval;
 
+// ✅ Reconnect system
+let reconnectTimeout = null;
+let reconnectAttempts = 0;
+
 function createBot() {
   console.log("Starting bot...");
 
@@ -37,6 +41,9 @@ function createBot() {
   bot.once("spawn", () => {
     console.log("Bot joined server");
 
+    // ✅ reset reconnect attempts
+    reconnectAttempts = 0;
+
     // Try login after join
     setTimeout(() => {
       bot.chat("/login botwa123123");
@@ -48,7 +55,6 @@ function createBot() {
 
       bot.setControlState("jump", true);
       setTimeout(() => bot.setControlState("jump", false), 120);
-
     }, 10000);
   });
 
@@ -64,8 +70,8 @@ function createBot() {
 
     if (text.includes("login")) {
       setTimeout(() => {
-       bot.chat("/login botwa123123");
-     }, 1000);
+        bot.chat("/login botwa123123");
+      }, 1000);
     }
   });
 
@@ -148,17 +154,50 @@ function createBot() {
     }
   });
 
-  bot.on("kicked", reason => console.log("Kicked:", reason));
+  // ✅ Kick handler (safe)
+  bot.on("kicked", (reason) => {
+    console.log("Kicked:", reason);
+
+    const msg = reason.toString().toLowerCase();
+
+    if (
+      msg.includes("banned") ||
+      msg.includes("whitelist") ||
+      msg.includes("not allowed")
+    ) {
+      console.log("❌ Not reconnecting due to restriction.");
+      reconnectTimeout = true; // block reconnect
+    }
+  });
+
   bot.on("error", err => console.log("Error:", err.message));
 
+  // ✅ Smart reconnect (main fix)
   bot.on("end", () => {
     console.log("Bot disconnected");
+
     if (jumpInterval) clearInterval(jumpInterval);
+
+    // prevent spam reconnect loops
+    if (reconnectTimeout) return;
+
+    reconnectAttempts++;
+
+    const delay = Math.min(30000, 5000 * reconnectAttempts);
+
+    console.log(`Reconnect attempt ${reconnectAttempts} in ${delay / 1000}s`);
+
+    reconnectTimeout = setTimeout(() => {
+      reconnectTimeout = null;
+      createBot();
+    }, delay);
   });
 }
 
+// Prevent crash
 process.on("uncaughtException", err => {
   console.log("Uncaught Error:", err);
 });
 
+// Start bot
 createBot();
