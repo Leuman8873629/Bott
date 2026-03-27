@@ -8,7 +8,7 @@ const mcDataLoader = require("minecraft-data");
 const app = express();
 const PORT = process.env.PORT || 3000;
 
-// Keep Railway service alive
+// Keep Railway alive
 app.get("/", (req, res) => res.send("Minecraft Bot Running"));
 app.listen(PORT, "0.0.0.0", () => {
   console.log("Web server running on port " + PORT);
@@ -17,12 +17,20 @@ app.listen(PORT, "0.0.0.0", () => {
 let bot;
 let jumpInterval;
 
-// ✅ Reconnect system
+// ✅ Reconnect control
 let reconnectTimeout = null;
 let reconnectAttempts = 0;
+let shouldReconnect = true;
 
 function createBot() {
   console.log("Starting bot...");
+
+  // ✅ kill old bot safely (important)
+  if (bot) {
+    try {
+      bot.quit();
+    } catch (e) {}
+  }
 
   bot = mineflayer.createBot({
     host: "Tomanreturns.aternos.me",
@@ -39,15 +47,15 @@ function createBot() {
   const mcData = mcDataLoader(bot.version);
 
   bot.once("spawn", () => {
-    console.log("Bot joined server");
+    console.log("✅ Bot joined server");
 
-    // ✅ reset reconnect attempts
     reconnectAttempts = 0;
+    shouldReconnect = true;
 
-    // Try login after join
+    // login
     setTimeout(() => {
       bot.chat("/login botwa123123");
-    }, 3000);
+    }, 4000);
 
     // Anti AFK
     jumpInterval = setInterval(() => {
@@ -58,24 +66,24 @@ function createBot() {
     }, 10000);
   });
 
-  // Detect register/login messages
+  // Auto login/register detect
   bot.on("message", (msg) => {
     const text = msg.toString().toLowerCase();
 
     if (text.includes("register")) {
       setTimeout(() => {
         bot.chat("/register botwa123123 botwa123123");
-      }, 1000);
+      }, 1500);
     }
 
     if (text.includes("login")) {
       setTimeout(() => {
         bot.chat("/login botwa123123");
-      }, 1000);
+      }, 1500);
     }
   });
 
-  // Auto equip sword and shield
+  // Equip items
   bot.on("playerCollect", (collector) => {
     if (collector !== bot.entity) return;
 
@@ -114,7 +122,7 @@ function createBot() {
     if (guardPos) moveToGuardPos();
   });
 
-  // AI loop
+  // AI
   bot.on("physicsTick", () => {
     if (!bot?.entity) return;
 
@@ -154,38 +162,44 @@ function createBot() {
     }
   });
 
-  // ✅ Kick handler (safe)
+  // ✅ Kick handler (MAIN FIX)
   bot.on("kicked", (reason) => {
     console.log("Kicked:", reason);
 
     const msg = reason.toString().toLowerCase();
+
+    if (msg.includes("already playing")) {
+      console.log("⚠️ Ghost session detected → waiting longer");
+      reconnectAttempts += 3; // big delay
+    }
 
     if (
       msg.includes("banned") ||
       msg.includes("whitelist") ||
       msg.includes("not allowed")
     ) {
-      console.log("❌ Not reconnecting due to restriction.");
-      reconnectTimeout = true; // block reconnect
+      console.log("❌ Stopping reconnect (restricted)");
+      shouldReconnect = false;
     }
   });
 
   bot.on("error", err => console.log("Error:", err.message));
 
-  // ✅ Smart reconnect (main fix)
+  // ✅ Smart reconnect (FINAL)
   bot.on("end", () => {
     console.log("Bot disconnected");
 
     if (jumpInterval) clearInterval(jumpInterval);
 
-    // prevent spam reconnect loops
+    if (!shouldReconnect) return;
     if (reconnectTimeout) return;
 
     reconnectAttempts++;
 
-    const delay = Math.min(30000, 5000 * reconnectAttempts);
+    // ✅ 10s → 60s delay (fix ghost issue)
+    const delay = Math.min(60000, 10000 * reconnectAttempts);
 
-    console.log(`Reconnect attempt ${reconnectAttempts} in ${delay / 1000}s`);
+    console.log(`🔁 Reconnect attempt ${reconnectAttempts} in ${delay / 1000}s`);
 
     reconnectTimeout = setTimeout(() => {
       reconnectTimeout = null;
@@ -199,5 +213,5 @@ process.on("uncaughtException", err => {
   console.log("Uncaught Error:", err);
 });
 
-// Start bot
+// Start
 createBot();
