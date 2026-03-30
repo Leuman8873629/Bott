@@ -8,6 +8,7 @@ const mcDataLoader = require("minecraft-data");
 const app = express();
 const PORT = process.env.PORT || 3000;
 
+// Keep Railway service alive
 app.get("/", (req, res) => res.send("Minecraft Bot Running"));
 app.listen(PORT, "0.0.0.0", () => {
   console.log("Web server running on port " + PORT);
@@ -16,27 +17,13 @@ app.listen(PORT, "0.0.0.0", () => {
 let bot;
 let jumpInterval;
 
-// 🔥 Reconnect system
-let reconnectTimeout = null;
-let reconnectAttempts = 0;
-let shouldReconnect = true;
-let reconnectLocked = false;
-
 function createBot() {
   console.log("Starting bot...");
 
-  // ✅ Kill old bot properly
-  if (bot) {
-    try {
-      bot.removeAllListeners();
-      bot.quit();
-    } catch (e) {}
-  }
-
   bot = mineflayer.createBot({
-    host: "Tomanreturns.aternos.me",
-    port: 37089,
-    username: "chatpata_momo",
+    host: "Season_four.aternos.me",
+    port: 32675,
+    username: "chatpata_bhaaluu",
     version: "1.21.11"
   });
 
@@ -48,45 +35,50 @@ function createBot() {
   const mcData = mcDataLoader(bot.version);
 
   bot.once("spawn", () => {
-    console.log("✅ Bot joined");
+    console.log("Bot joined server");
 
-    reconnectAttempts = 0;
-    reconnectLocked = false;
-    shouldReconnect = true;
-
+    // Try login after join
     setTimeout(() => {
-      bot.chat("/login botwa123123");
-    }, 4000);
+     // bot.chat("/login botwa123123");
+    }, 3000);
 
+    // Anti AFK
     jumpInterval = setInterval(() => {
       if (!bot?.entity) return;
+
       bot.setControlState("jump", true);
       setTimeout(() => bot.setControlState("jump", false), 120);
+
     }, 10000);
   });
 
+  // Detect register/login messages
   bot.on("message", (msg) => {
     const text = msg.toString().toLowerCase();
 
-    if (text.includes("register")) {
+   /* if (text.includes("register")) {
       setTimeout(() => {
         bot.chat("/register botwa123123 botwa123123");
-      }, 1500);
+      }, 1000);
     }
 
     if (text.includes("login")) {
       setTimeout(() => {
-        bot.chat("/login botwa123123");
-      }, 1500);
-    }
+       bot.chat("/login botwa123123");
+     }, 1000);
+    } */
   });
 
+  // Auto equip sword and shield
   bot.on("playerCollect", (collector) => {
     if (collector !== bot.entity) return;
 
     setTimeout(() => {
       const sword = bot.inventory.items().find(i => i.name.includes("sword"));
       if (sword) bot.equip(sword, "hand").catch(() => {});
+
+      const shield = bot.inventory.items().find(i => i.name.includes("shield"));
+      if (shield) bot.equip(shield, "off-hand").catch(() => {});
     }, 300);
   });
 
@@ -116,6 +108,7 @@ function createBot() {
     if (guardPos) moveToGuardPos();
   });
 
+  // AI loop
   bot.on("physicsTick", () => {
     if (!bot?.entity) return;
 
@@ -129,6 +122,7 @@ function createBot() {
     if (guardPos) {
       const mob = bot.nearestEntity(e =>
         e.type === "mob" &&
+        e.mobType !== "Armor Stand" &&
         e.position.distanceTo(bot.entity.position) < 16
       );
 
@@ -136,80 +130,36 @@ function createBot() {
     }
   });
 
+  // Chat commands
   bot.on("chat", (username, message) => {
     if (username === bot.username) return;
 
     if (message === "guard") {
       const player = bot.players[username];
       if (player?.entity) {
-        bot.chat("Guarding area");
+        bot.chat("Guarding this area!");
         guardArea(player.entity.position);
       }
     }
 
     if (message === "stop") {
-      bot.chat("Stopping");
+      bot.chat("Stopping guard!");
       stopGuarding();
     }
   });
 
-  // 🔥 MAIN FIX
-  bot.on("kicked", (reason) => {
-    console.log("Kicked:", reason);
-
-    const msg = reason.toString().toLowerCase();
-
-    if (msg.includes("already playing")) {
-      console.log("🛑 Ghost session → LOCK 60s");
-
-      reconnectLocked = true;
-
-      setTimeout(() => {
-        reconnectLocked = false;
-        console.log("🔓 Reconnect unlocked");
-      }, 60000);
-    }
-
-    if (
-      msg.includes("banned") ||
-      msg.includes("whitelist") ||
-      msg.includes("not allowed")
-    ) {
-      console.log("❌ No reconnect allowed");
-      shouldReconnect = false;
-    }
-  });
-
+  bot.on("kicked", reason => console.log("Kicked:", reason));
   bot.on("error", err => console.log("Error:", err.message));
 
   bot.on("end", () => {
     console.log("Bot disconnected");
-
     if (jumpInterval) clearInterval(jumpInterval);
-
-    if (!shouldReconnect) return;
-    if (reconnectTimeout) return;
-
-    if (reconnectLocked) {
-      console.log("⏳ Waiting for session clear...");
-      return;
-    }
-
-    reconnectAttempts++;
-
-    const delay = Math.min(90000, 15000 * reconnectAttempts);
-
-    console.log(`🔁 Reconnect in ${delay / 1000}s`);
-
-    reconnectTimeout = setTimeout(() => {
-      reconnectTimeout = null;
-      createBot();
-    }, delay);
   });
 }
 
 process.on("uncaughtException", err => {
-  console.log("Uncaught:", err);
+  console.log("Uncaught Error:", err);
 });
 
 createBot();
+                                               
