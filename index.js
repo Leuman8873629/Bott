@@ -12,23 +12,34 @@ app.use(express.json());
 app.get("/", (_, res) => res.send("Bot is running"));
 app.listen(process.env.PORT || 3000);
 
-// ✅ FIXED KEEP ALIVE
+// ✅ KEEP ALIVE (only for Replit)
 setInterval(() => {
   if (process.env.PROJECT_DOMAIN) {
     http.get(`http://${process.env.PROJECT_DOMAIN}.repl.co/`);
   }
 }, 240000);
 
-// 🔁 RECONNECT CONTROL
-let reconnecting = false;
+// 🔒 GLOBAL CONTROL
+let bot = null;
+let reconnectTimeout = null;
+let isConnecting = false;
 
+// 🤖 CREATE BOT
 function createBot() {
-  if (reconnecting) return;
-  reconnecting = true;
+  if (isConnecting) return;
+  isConnecting = true;
 
-  console.log("Starting bot...");
+  console.log("🚀 Starting bot...");
 
-  const bot = mineflayer.createBot({
+  // kill old bot
+  if (bot) {
+    try {
+      bot.removeAllListeners();
+      bot.quit();
+    } catch (e) {}
+  }
+
+  bot = mineflayer.createBot({
     host: "Tomanreturns.aternos.me",
     port: 37089,
     username: "rioBekasdfsi",
@@ -44,30 +55,21 @@ function createBot() {
   bot.loadPlugin(armorManager);
   bot.loadPlugin(pathfinder);
 
-  let jumpInterval;
   let guardPos = null;
 
+  // ✅ SPAWN
   bot.on("spawn", () => {
     console.log("✅ Bot joined");
-    reconnecting = false;
 
-    if (jumpInterval) clearInterval(jumpInterval);
+    isConnecting = false;
 
-    // ✅ NATURAL ANTI-DETECTION MOVEMENT
-    jumpInterval = setInterval(() => {
-      if (!bot.entity) return;
-
-      bot.setControlState("jump", true);
-      setTimeout(() => bot.setControlState("jump", false), 120);
-
-      if (Math.random() < 0.3) {
-        bot.setControlState("sneak", true);
-        setTimeout(() => bot.setControlState("sneak", false), 300);
-      }
-    }, 8000); // slower = safer
+    if (reconnectTimeout) {
+      clearTimeout(reconnectTimeout);
+      reconnectTimeout = null;
+    }
   });
 
-  // ✅ AUTO EQUIP (combined)
+  // ✅ AUTO EQUIP
   bot.on("playerCollect", (collector) => {
     if (collector !== bot.entity) return;
 
@@ -80,6 +82,7 @@ function createBot() {
     }, 200);
   });
 
+  // 🛡 GUARD SYSTEM
   function guardArea(pos) {
     guardPos = pos.clone();
     if (!bot.pvp.target) moveToGuardPos();
@@ -106,10 +109,11 @@ function createBot() {
     if (guardPos) moveToGuardPos();
   });
 
-  // ✅ FIXED physicsTick
+  // 👀 LOOK + ATTACK
   bot.on("physicsTick", () => {
     if (!bot.entity) return;
 
+    // look around
     if (!bot.pvp.target && !bot.pathfinder.isMoving()) {
       const entity = bot.nearestEntity();
       if (entity) {
@@ -117,6 +121,7 @@ function createBot() {
       }
     }
 
+    // attack mobs
     if (guardPos) {
       const mob = bot.nearestEntity(e =>
         e.type === "mob" &&
@@ -127,6 +132,7 @@ function createBot() {
     }
   });
 
+  // 💬 CHAT COMMANDS
   bot.on("chat", (username, message) => {
     if (username === bot.username) return;
 
@@ -144,22 +150,41 @@ function createBot() {
     }
   });
 
-  bot.on("kicked", reason => {
-    console.log("Kicked:", reason);
+  // ❌ KICK HANDLING
+  bot.on("kicked", (reason) => {
+    const msg = reason.toString().toLowerCase();
+    console.log("❌ Kicked:", msg);
+
+    if (msg.includes("already playing")) {
+      console.log("⏳ Waiting 30s (ghost session)");
+      return setTimeout(safeReconnect, 30000);
+    }
+
+    safeReconnect();
   });
 
-  bot.on("error", err => {
-    console.log("Error:", err.message);
+  // ⚠️ ERROR
+  bot.on("error", (err) => {
+    console.log("⚠️ Error:", err.message);
   });
 
+  // 🔌 DISCONNECT
   bot.on("end", () => {
-    console.log("❌ Bot disconnected. Reconnecting in 10s...");
-    reconnecting = false;
-
-    if (jumpInterval) clearInterval(jumpInterval);
-
-    setTimeout(createBot, 10000);
+    console.log("🔌 Disconnected");
+    safeReconnect();
   });
+}
+
+// 🔁 SAFE RECONNECT
+function safeReconnect() {
+  if (reconnectTimeout) return;
+
+  isConnecting = false;
+
+  reconnectTimeout = setTimeout(() => {
+    reconnectTimeout = null;
+    createBot();
+  }, 15000);
 }
 
 createBot();
