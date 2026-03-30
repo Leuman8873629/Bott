@@ -1,173 +1,217 @@
 const express = require("express");
-const http = require("http");
-const mineflayer = require('mineflayer')
-const pvp = require('mineflayer-pvp').plugin
-const { pathfinder, Movements, goals} = require('mineflayer-pathfinder')
-const armorManager = require('mineflayer-armor-manager')
+const mineflayer = require("mineflayer");
+const pvp = require("mineflayer-pvp").plugin;
+const { pathfinder, Movements, goals } = require("mineflayer-pathfinder");
+const armorManager = require("mineflayer-armor-manager");
+const mcDataLoader = require("minecraft-data");
+
 const app = express();
+const PORT = process.env.PORT || 3000;
 
-app.use(express.json());
+app.get("/", (req, res) => res.send("Minecraft Bot Running"));
+app.listen(PORT, "0.0.0.0", () => {
+  console.log("Web server running on port " + PORT);
+});
 
-app.get("/", (_, res) => res.sendFile(__dirname + "/index.html"));
-app.listen(process.env.PORT || 3000);
+let bot;
+let jumpInterval;
 
-// Keep alive (Replit)
-setInterval(() => {
-  http.get(`http://${process.env.PROJECT_DOMAIN}.repl.co/`);
-}, 224000);
+// 🔥 Reconnect system
+let reconnectTimeout = null;
+let reconnectAttempts = 0;
+let shouldReconnect = true;
+let reconnectLocked = false;
 
-// ================= BOT =================
+function createBot() {
+  console.log("Starting bot...");
 
-function createBot () {
-
-const bot = mineflayer.createBot({
-  host: 'Tomanreturns.aternos.me',
-  port: 37089,
-  username:'rioBekassii',
-  version: 1.21.11
-})
-
-// Load plugins
-bot.loadPlugin(pvp)
-bot.loadPlugin(armorManager)
-bot.loadPlugin(pathfinder)
-
-// ================= SMART AUTH =================
-
-const PASSWORD = "bot112022"
-
-let registered = false
-let loggedIn = false
-
-bot.on('spawn', () => {
-  registered = false
-  loggedIn = false
-
-  console.log("Bot spawned")
-
-  // small delay to look human
-  setTimeout(() => {
-    bot.chat("/login " + PASSWORD)
-  }, 2000)
-})
-
-bot.on('messagestr', (msg) => {
-  const message = msg.toLowerCase()
-
-  if (message.includes("/register") && !registered) {
-    bot.chat(`/register ${PASSWORD} ${PASSWORD}`)
-    registered = true
-    console.log("Registered")
+  // ✅ Kill old bot properly
+  if (bot) {
+    try {
+      bot.removeAllListeners();
+      bot.quit();
+    } catch (e) {}
   }
 
-  if (message.includes("/login") && !loggedIn) {
+  bot = mineflayer.createBot({
+    host: "Tomanreturns.aternos.me",
+    port: 37089,
+    username: "chatpata_momo",
+    version: "1.21.11"
+  });
+
+  bot.loadPlugin(pvp);
+  bot.loadPlugin(armorManager);
+  bot.loadPlugin(pathfinder);
+
+  let guardPos = null;
+  const mcData = mcDataLoader(bot.version);
+
+  bot.once("spawn", () => {
+    console.log("✅ Bot joined");
+
+    reconnectAttempts = 0;
+    reconnectLocked = false;
+    shouldReconnect = true;
+
     setTimeout(() => {
-      bot.chat(`/login ${PASSWORD}`)
-    }, 1500)
+      bot.chat("/login botwa123123");
+    }, 4000);
 
-    loggedIn = true
-    console.log("Logged in")
-  }
-})
+    jumpInterval = setInterval(() => {
+      if (!bot?.entity) return;
+      bot.setControlState("jump", true);
+      setTimeout(() => bot.setControlState("jump", false), 120);
+    }, 10000);
+  });
 
-// ================= AUTO EQUIP =================
+  bot.on("message", (msg) => {
+    const text = msg.toString().toLowerCase();
 
-bot.on('playerCollect', (collector) => {
-  if (collector !== bot.entity) return
-
-  setTimeout(() => {
-    const sword = bot.inventory.items().find(i => i.name.includes('sword'))
-    if (sword) bot.equip(sword, 'hand')
-  }, 150)
-
-  setTimeout(() => {
-    const shield = bot.inventory.items().find(i => i.name.includes('shield'))
-    if (shield) bot.equip(shield, 'off-hand')
-  }, 300)
-})
-
-// ================= GUARD SYSTEM =================
-
-let guardPos = null
-
-function guardArea (pos) {
-  guardPos = pos.clone()
-  moveToGuardPos()
-}
-
-function stopGuarding () {
-  guardPos = null
-  bot.pvp.stop()
-  bot.pathfinder.setGoal(null)
-}
-
-function moveToGuardPos () {
-  const mcData = require('minecraft-data')(bot.version)
-  bot.pathfinder.setMovements(new Movements(bot, mcData))
-  bot.pathfinder.setGoal(new goals.GoalBlock(guardPos.x, guardPos.y, guardPos.z))
-}
-
-bot.on('stoppedAttacking', () => {
-  if (guardPos) moveToGuardPos()
-})
-
-// Look at nearby entities (idle behavior)
-bot.on('physicTick', () => {
-  if (bot.pvp.target) return
-  if (bot.pathfinder.isMoving()) return
-
-  const entity = bot.nearestEntity()
-  if (entity) bot.lookAt(entity.position.offset(0, entity.height, 0))
-})
-
-// Attack mobs near guard area
-bot.on('physicTick', () => {
-  if (!guardPos) return
-
-  const entity = bot.nearestEntity(e =>
-    e.type === 'mob' &&
-    e.mobType !== 'Armor Stand' &&
-    e.position.distanceTo(bot.entity.position) < 16
-  )
-
-  if (entity) bot.pvp.attack(entity)
-})
-
-// ================= CHAT COMMANDS =================
-
-bot.on('chat', (username, message) => {
-
-  if (username === bot.username) return
-
-  if (message === 'guard') {
-    const player = bot.players[username]
-
-    if (!player || !player.entity) {
-      bot.chat("I can't see you!")
-      return
+    if (text.includes("register")) {
+      setTimeout(() => {
+        bot.chat("/register botwa123123 botwa123123");
+      }, 1500);
     }
 
-    bot.chat('Guarding this area!')
-    guardArea(player.entity.position)
+    if (text.includes("login")) {
+      setTimeout(() => {
+        bot.chat("/login botwa123123");
+      }, 1500);
+    }
+  });
+
+  bot.on("playerCollect", (collector) => {
+    if (collector !== bot.entity) return;
+
+    setTimeout(() => {
+      const sword = bot.inventory.items().find(i => i.name.includes("sword"));
+      if (sword) bot.equip(sword, "hand").catch(() => {});
+    }, 300);
+  });
+
+  function guardArea(pos) {
+    guardPos = pos.clone();
+    if (!bot.pvp.target) moveToGuardPos();
   }
 
-  if (message === 'stop') {
-    bot.chat('Stopping guard!')
-    stopGuarding()
+  function stopGuarding() {
+    guardPos = null;
+    bot.pvp.stop();
+    bot.pathfinder.setGoal(null);
   }
-})
 
-// ================= RECONNECT SYSTEM =================
+  function moveToGuardPos() {
+    if (!guardPos) return;
 
-bot.on('end', () => {
-  console.log("Bot disconnected. Reconnecting in 5s...")
-  setTimeout(createBot, 5000)
-})
+    const movements = new Movements(bot, mcData);
+    bot.pathfinder.setMovements(movements);
 
-bot.on('kicked', console.log)
-bot.on('error', console.log)
+    bot.pathfinder.setGoal(
+      new goals.GoalBlock(guardPos.x, guardPos.y, guardPos.z)
+    );
+  }
 
+  bot.on("stoppedAttacking", () => {
+    if (guardPos) moveToGuardPos();
+  });
+
+  bot.on("physicsTick", () => {
+    if (!bot?.entity) return;
+
+    if (!bot.pvp.target && !bot.pathfinder.isMoving()) {
+      const entity = bot.nearestEntity();
+      if (entity) {
+        bot.lookAt(entity.position.offset(0, entity.height, 0), true).catch(() => {});
+      }
+    }
+
+    if (guardPos) {
+      const mob = bot.nearestEntity(e =>
+        e.type === "mob" &&
+        e.position.distanceTo(bot.entity.position) < 16
+      );
+
+      if (mob) bot.pvp.attack(mob);
+    }
+  });
+
+  bot.on("chat", (username, message) => {
+    if (username === bot.username) return;
+
+    if (message === "guard") {
+      const player = bot.players[username];
+      if (player?.entity) {
+        bot.chat("Guarding area");
+        guardArea(player.entity.position);
+      }
+    }
+
+    if (message === "stop") {
+      bot.chat("Stopping");
+      stopGuarding();
+    }
+  });
+
+  // 🔥 MAIN FIX
+  bot.on("kicked", (reason) => {
+    console.log("Kicked:", reason);
+
+    const msg = reason.toString().toLowerCase();
+
+    if (msg.includes("already playing")) {
+      console.log("🛑 Ghost session → LOCK 60s");
+
+      reconnectLocked = true;
+
+      setTimeout(() => {
+        reconnectLocked = false;
+        console.log("🔓 Reconnect unlocked");
+      }, 60000);
+    }
+
+    if (
+      msg.includes("banned") ||
+      msg.includes("whitelist") ||
+      msg.includes("not allowed")
+    ) {
+      console.log("❌ No reconnect allowed");
+      shouldReconnect = false;
+    }
+  });
+
+  bot.on("error", err => console.log("Error:", err.message));
+
+  bot.on("end", () => {
+    console.log("Bot disconnected");
+
+    if (jumpInterval) clearInterval(jumpInterval);
+
+    if (!shouldReconnect) return;
+    if (reconnectTimeout) return;
+
+    if (reconnectLocked) {
+      console.log("⏳ Waiting for session clear...");
+      return;
+    }
+
+    reconnectAttempts++;
+
+    const delay = Math.min(90000, 15000 * reconnectAttempts);
+
+    console.log(`🔁 Reconnect in ${delay / 1000}s`);
+
+    reconnectTimeout = setTimeout(() => {
+      reconnectTimeout = null;
+      createBot();
+    }, delay);
+  });
 }
 
-// Start bot
-createBot()
+process.on("uncaughtException", err => {
+  console.log("Uncaught:", err);
+});
+
+createBot();
+
+Will it will be join automatically when server starts 
