@@ -33,7 +33,7 @@ function createBot() {
     host: "Tomanreturns.aternos.me",
     port: 37089,
     username: "chatpata_momo",
-    version: "1.21.11" // 🔒 unchanged as you asked
+    version: "1.21.11" // 🔒 kept as you wanted
   });
 
   bot.loadPlugin(pvp);
@@ -42,6 +42,7 @@ function createBot() {
 
   let guardPos = null;
   let lastLook = 0;
+  let spawnTime = 0;
 
   bot.once("spawn", () => {
     console.log("✅ Bot joined");
@@ -50,12 +51,19 @@ function createBot() {
     reconnectLocked = false;
     shouldReconnect = true;
 
-    // ✅ safer physics
+    spawnTime = Date.now();
+
+    // 🧊 FREEZE EVERYTHING (CRITICAL FIX)
+    bot.clearControlStates();
+    bot.entity.velocity.set(0, 0, 0);
     bot.physics.maxGroundSpeed = 4.3;
 
+    // wait for server stability
     setTimeout(() => {
       bot.chat("/login botwa123123");
     }, 6000);
+
+    console.log("🧊 Spawn protection active (3s)");
   });
 
   bot.on("message", (msg) => {
@@ -100,7 +108,7 @@ function createBot() {
     const mcData = mcDataLoader(bot.version);
     const movements = new Movements(bot, mcData);
 
-    // ✅ anti-cheat safe
+    // ✅ SAFE MOVEMENT
     movements.allow1by1towers = false;
     movements.canDig = false;
     movements.allowParkour = false;
@@ -119,9 +127,12 @@ function createBot() {
   bot.on("physicsTick", () => {
     if (!bot?.entity) return;
 
+    // ❌ BLOCK ALL ACTIONS FOR FIRST 3s
+    if (Date.now() - spawnTime < 3000) return;
+
     const now = Date.now();
 
-    // ✅ fixed look spam
+    // ✅ LIMITED LOOK
     if (!bot.pvp.target && !bot.pathfinder.isMoving()) {
       if (now - lastLook > 1000) {
         const entity = bot.nearestEntity();
@@ -132,6 +143,7 @@ function createBot() {
       }
     }
 
+    // ✅ SAFE ATTACK
     if (guardPos) {
       const mob = bot.nearestEntity(e =>
         e.type === "mob" &&
