@@ -1,5 +1,4 @@
 const express = require("express");
-
 const mineflayer = require("mineflayer");
 
 const pvp = require("mineflayer-pvp").plugin;
