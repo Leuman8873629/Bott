@@ -23,8 +23,8 @@ function createBot () {
 const bot = mineflayer.createBot({
   host: 'Tomanreturns.aternos.me',
   port: 37089,
-  username:'rioBekasii',
-  version: false
+  username:'rioBekassii',
+  version: 1.21.11
 })
 
 // Load plugins
