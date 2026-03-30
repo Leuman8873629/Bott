@@ -10,14 +10,14 @@ const app = express();
 app.get("/", (_, res) => res.send("Bot running"));
 app.listen(process.env.PORT || 3000);
 
-// keep alive (replit only)
+// keep alive
 setInterval(() => {
   if (process.env.PROJECT_DOMAIN) {
     http.get(`http://${process.env.PROJECT_DOMAIN}.repl.co/`);
   }
 }, 240000);
 
-// ===== GLOBAL CONTROL =====
+// ===== GLOBAL =====
 let bot = null;
 let reconnectTimeout = null;
 let isConnecting = false;
@@ -28,12 +28,11 @@ function createBot() {
 
   console.log("🚀 Starting bot...");
 
-  // kill old bot
   if (bot) {
     try {
       bot.removeAllListeners();
       bot.quit();
-    } catch (e) {}
+    } catch {}
   }
 
   bot = mineflayer.createBot({
@@ -41,11 +40,8 @@ function createBot() {
     port: 37089,
     username: "rioBekasdfsi",
     version: "1.21.11",
-
     plugins: [AutoAuth],
-    AutoAuth: {
-      password: "bot112022"
-    }
+    AutoAuth: { password: "bot112022" }
   });
 
   bot.loadPlugin(pvp);
@@ -54,6 +50,7 @@ function createBot() {
 
   let guardPos = null;
   let lastHit = 0;
+  let moveInterval;
 
   // ===== SPAWN =====
   bot.on("spawn", () => {
@@ -64,13 +61,46 @@ function createBot() {
       clearTimeout(reconnectTimeout);
       reconnectTimeout = null;
     }
+
+    // 🔥 MICRO MOVEMENT (FIX FREEZE)
+    if (moveInterval) clearInterval(moveInterval);
+
+    moveInterval = setInterval(() => {
+      if (!bot.entity) return;
+
+      const actions = ["forward", "back", "left", "right"];
+      const action = actions[Math.floor(Math.random() * actions.length)];
+
+      bot.setControlState(action, true);
+
+      setTimeout(() => {
+        bot.setControlState(action, false);
+      }, 300);
+
+    }, 3000);
+
+    // 👀 HEAD MOVEMENT (human-like)
+    setInterval(() => {
+      if (!bot.entity) return;
+
+      const yaw = bot.entity.yaw + (Math.random() - 0.5) * 0.5;
+      const pitch = bot.entity.pitch + (Math.random() - 0.5) * 0.2;
+
+      bot.look(yaw, pitch, true);
+    }, 4000);
   });
 
-  // ===== KNOCKBACK DETECTION =====
+  // ===== HIT REACTION =====
   bot.on("entityHurt", (entity) => {
-    if (entity === bot.entity) {
-      lastHit = Date.now();
-    }
+    if (entity !== bot.entity) return;
+
+    lastHit = Date.now();
+
+    // small knockback reaction
+    bot.setControlState("back", true);
+    setTimeout(() => {
+      bot.setControlState("back", false);
+    }, 400);
   });
 
   // ===== AUTO EQUIP =====
@@ -86,7 +116,7 @@ function createBot() {
     }, 200);
   });
 
-  // ===== GUARD SYSTEM =====
+  // ===== GUARD =====
   function guardArea(pos) {
     guardPos = pos.clone();
     moveToGuardPos();
@@ -109,7 +139,6 @@ function createBot() {
     );
   }
 
-  // stop pathfinder while fighting
   bot.on("startedAttacking", () => {
     bot.pathfinder.setGoal(null);
   });
@@ -118,22 +147,12 @@ function createBot() {
     if (guardPos) moveToGuardPos();
   });
 
-  // ===== SAFE AI LOOP (NO physicsTick) =====
+  // ===== SAFE AI LOOP =====
   setInterval(() => {
     if (!bot.entity) return;
 
-    // look around (safe)
-    if (!bot.pvp.target && !bot.pathfinder.isMoving()) {
-      const entity = bot.nearestEntity();
-      if (entity) {
-        bot.lookAt(entity.position.offset(0, entity.height, 0)).catch(() => {});
-      }
-    }
-
-    // wait after hit (IMPORTANT)
     if (Date.now() - lastHit < 1200) return;
 
-    // attack mobs safely
     if (guardPos && !bot.pvp.target) {
       const mob = bot.nearestEntity(e =>
         e.type === "mob" &&
@@ -142,52 +161,51 @@ function createBot() {
 
       if (mob) bot.pvp.attack(mob);
     }
-  }, 500); // slow = safe
 
-  // ===== CHAT COMMANDS =====
+  }, 500);
+
+  // ===== CHAT =====
   bot.on("chat", (username, message) => {
     if (username === bot.username) return;
 
     if (message === "guard") {
       const player = bot.players[username];
       if (player?.entity) {
-        bot.chat("Guarding here!");
+        bot.chat("Guarding!");
         guardArea(player.entity.position);
       }
     }
 
     if (message === "stop") {
-      bot.chat("Stopping!");
+      bot.chat("Stopped!");
       stopGuarding();
     }
   });
 
-  // ===== KICK HANDLING =====
+  // ===== KICK =====
   bot.on("kicked", (reason) => {
     const msg = reason.toString().toLowerCase();
     console.log("❌ Kicked:", msg);
 
     if (msg.includes("already playing")) {
-      console.log("⏳ Waiting 30s (ghost session)");
+      console.log("⏳ Waiting 30s...");
       return setTimeout(safeReconnect, 30000);
     }
 
     safeReconnect();
   });
 
-  // ===== ERROR =====
   bot.on("error", (err) => {
     console.log("⚠️ Error:", err.message);
   });
 
-  // ===== DISCONNECT =====
   bot.on("end", () => {
     console.log("🔌 Disconnected");
     safeReconnect();
   });
 }
 
-// ===== SAFE RECONNECT =====
+// ===== RECONNECT =====
 function safeReconnect() {
   if (reconnectTimeout) return;
 
