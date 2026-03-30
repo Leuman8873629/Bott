@@ -21,9 +21,9 @@ function createBot() {
   console.log("Starting bot...");
 
   bot = mineflayer.createBot({
-    host: "Season_four.aternos.me",
-    port: 32675,
-    username: "chatpata_bhaaluu",
+    host: "Tomanreturns.aternos.me:37089",
+    port: 37089,
+    username: "chatpata_momo",
     version: "1.21.11" // FIX 1: was "1.21.11" (invalid version string)
   });
 
