@@ -14,19 +14,18 @@ app.listen(PORT, "0.0.0.0", () => {
 });
 
 let bot;
+let jumpInterval;
+
+// 🔥 Reconnect system
 let reconnectTimeout = null;
 let reconnectAttempts = 0;
 let shouldReconnect = true;
 let reconnectLocked = false;
 
-// 🔒 TIMERS
-let spawnTime = 0;
-let loginTime = 0;
-let lastHit = 0;
-
 function createBot() {
   console.log("Starting bot...");
 
+  // ✅ Kill old bot properly
   if (bot) {
     try {
       bot.removeAllListeners();
@@ -46,7 +45,7 @@ function createBot() {
   bot.loadPlugin(pathfinder);
 
   let guardPos = null;
-  let lastLook = 0;
+  const mcData = mcDataLoader(bot.version);
 
   bot.once("spawn", () => {
     console.log("✅ Bot joined");
@@ -55,73 +54,31 @@ function createBot() {
     reconnectLocked = false;
     shouldReconnect = true;
 
-    spawnTime = Date.now();
-
-    // 🧊 FULL FREEZE ON SPAWN
-    bot.physicsEnabled = false;
-    bot.clearControlStates();
-
     setTimeout(() => {
       bot.chat("/login botwa123123");
-    }, 6000);
+    }, 4000);
 
-    // unfreeze after safe time
-    setTimeout(() => {
-      bot.physicsEnabled = true;
-      console.log("🟢 Spawn movement enabled");
-    }, 7000);
+    jumpInterval = setInterval(() => {
+      if (!bot?.entity) return;
+      bot.setControlState("jump", true);
+      setTimeout(() => bot.setControlState("jump", false), 120);
+    }, 10000);
   });
 
   bot.on("message", (msg) => {
     const text = msg.toString().toLowerCase();
 
-    // ✅ LOGIN DETECT
-    if (text.includes("logged in")) {
-      console.log("✅ Login success");
-
-      loginTime = Date.now();
-
-      // 🧊 FREEZE AFTER TELEPORT
-      bot.physicsEnabled = false;
-      bot.clearControlStates();
-
-      setTimeout(() => {
-        bot.physicsEnabled = true;
-        console.log("🟢 Post-login movement enabled");
-      }, 5000);
-    }
-
-    if (text.includes("/register")) {
+    if (text.includes("register")) {
       setTimeout(() => {
         bot.chat("/register botwa123123 botwa123123");
-      }, 2000);
+      }, 1500);
     }
 
-    if (text.includes("/login")) {
+    if (text.includes("login")) {
       setTimeout(() => {
         bot.chat("/login botwa123123");
-      }, 2000);
+      }, 1500);
     }
-  });
-
-  // 🛡️ HIT PROTECTION
-  bot.on("entityHurt", (entity) => {
-    if (entity !== bot.entity) return;
-
-    console.log("⚠️ Bot got hit");
-
-    lastHit = Date.now();
-
-    bot.clearControlStates();
-    bot.pvp.stop();
-    bot.pathfinder.setGoal(null);
-
-    bot.physicsEnabled = false;
-
-    setTimeout(() => {
-      bot.physicsEnabled = true;
-      console.log("🟢 Recovered from hit");
-    }, 2000);
   });
 
   bot.on("playerCollect", (collector) => {
@@ -147,15 +104,7 @@ function createBot() {
   function moveToGuardPos() {
     if (!guardPos) return;
 
-    const mcData = mcDataLoader(bot.version);
     const movements = new Movements(bot, mcData);
-
-    // 🧊 SAFE MOVEMENT ONLY
-    movements.allowSprinting = false;
-    movements.allowParkour = false;
-    movements.canDig = false;
-    movements.allow1by1towers = false;
-
     bot.pathfinder.setMovements(movements);
 
     bot.pathfinder.setGoal(
@@ -170,29 +119,17 @@ function createBot() {
   bot.on("physicsTick", () => {
     if (!bot?.entity) return;
 
-    const now = Date.now();
-
-    // ❌ BLOCK CONDITIONS
-    if (now - spawnTime < 3000) return;
-    if (now - loginTime < 5000) return;
-    if (now - lastHit < 2000) return;
-
-    // ✅ SAFE LOOK
     if (!bot.pvp.target && !bot.pathfinder.isMoving()) {
-      if (now - lastLook > 1000) {
-        const entity = bot.nearestEntity();
-        if (entity) {
-          bot.lookAt(entity.position.offset(0, entity.height, 0), true).catch(()=>{});
-        }
-        lastLook = now;
+      const entity = bot.nearestEntity();
+      if (entity) {
+        bot.lookAt(entity.position.offset(0, entity.height, 0), true).catch(() => {});
       }
     }
 
-    // ✅ SAFE ATTACK
     if (guardPos) {
       const mob = bot.nearestEntity(e =>
         e.type === "mob" &&
-        e.position.distanceTo(bot.entity.position) < 10
+        e.position.distanceTo(bot.entity.position) < 16
       );
 
       if (mob) bot.pvp.attack(mob);
@@ -216,16 +153,20 @@ function createBot() {
     }
   });
 
+  // 🔥 MAIN FIX
   bot.on("kicked", (reason) => {
-    console.log("❌ Kicked:", reason);
+    console.log("Kicked:", reason);
 
     const msg = reason.toString().toLowerCase();
 
     if (msg.includes("already playing")) {
+      console.log("🛑 Ghost session → LOCK 60s");
+
       reconnectLocked = true;
 
       setTimeout(() => {
         reconnectLocked = false;
+        console.log("🔓 Reconnect unlocked");
       }, 60000);
     }
 
@@ -234,18 +175,25 @@ function createBot() {
       msg.includes("whitelist") ||
       msg.includes("not allowed")
     ) {
+      console.log("❌ No reconnect allowed");
       shouldReconnect = false;
     }
   });
 
-  bot.on("error", err => console.log("❌ Error:", err));
+  bot.on("error", err => console.log("Error:", err.message));
 
   bot.on("end", () => {
     console.log("Bot disconnected");
 
+    if (jumpInterval) clearInterval(jumpInterval);
+
     if (!shouldReconnect) return;
     if (reconnectTimeout) return;
-    if (reconnectLocked) return;
+
+    if (reconnectLocked) {
+      console.log("⏳ Waiting for session clear...");
+      return;
+    }
 
     reconnectAttempts++;
 
