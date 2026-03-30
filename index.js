@@ -14,9 +14,6 @@ app.listen(PORT, "0.0.0.0", () => {
 });
 
 let bot;
-let jumpInterval;
-
-// 🔥 Reconnect system
 let reconnectTimeout = null;
 let reconnectAttempts = 0;
 let shouldReconnect = true;
@@ -25,7 +22,6 @@ let reconnectLocked = false;
 function createBot() {
   console.log("Starting bot...");
 
-  // ✅ Kill old bot properly
   if (bot) {
     try {
       bot.removeAllListeners();
@@ -37,7 +33,7 @@ function createBot() {
     host: "Tomanreturns.aternos.me",
     port: 37089,
     username: "chatpata_momo",
-    version: "1.21.11"
+    version: false // ✅ auto detect (fix)
   });
 
   bot.loadPlugin(pvp);
@@ -45,7 +41,7 @@ function createBot() {
   bot.loadPlugin(pathfinder);
 
   let guardPos = null;
-  const mcData = mcDataLoader(bot.version);
+  let lastLook = 0;
 
   bot.once("spawn", () => {
     console.log("✅ Bot joined");
@@ -54,15 +50,12 @@ function createBot() {
     reconnectLocked = false;
     shouldReconnect = true;
 
+    // ✅ normal physics (fix)
+    bot.physics.maxGroundSpeed = 4.3;
+
     setTimeout(() => {
       bot.chat("/login botwa123123");
     }, 4000);
-
-    jumpInterval = setInterval(() => {
-      if (!bot?.entity) return;
-      bot.setControlState("jump", true);
-      setTimeout(() => bot.setControlState("jump", false), 120);
-    }, 10000);
   });
 
   bot.on("message", (msg) => {
@@ -104,7 +97,14 @@ function createBot() {
   function moveToGuardPos() {
     if (!guardPos) return;
 
+    const mcData = mcDataLoader(bot.version);
     const movements = new Movements(bot, mcData);
+
+    // ✅ SAFE movement config (fix)
+    movements.allow1by1towers = false;
+    movements.canDig = false;
+    movements.allowParkour = false;
+
     bot.pathfinder.setMovements(movements);
 
     bot.pathfinder.setGoal(
@@ -119,10 +119,16 @@ function createBot() {
   bot.on("physicsTick", () => {
     if (!bot?.entity) return;
 
+    const now = Date.now();
+
+    // ✅ limit lookAt (fix)
     if (!bot.pvp.target && !bot.pathfinder.isMoving()) {
-      const entity = bot.nearestEntity();
-      if (entity) {
-        bot.lookAt(entity.position.offset(0, entity.height, 0), true).catch(() => {});
+      if (now - lastLook > 1000) {
+        const entity = bot.nearestEntity();
+        if (entity) {
+          bot.lookAt(entity.position.offset(0, entity.height, 0), true).catch(() => {});
+        }
+        lastLook = now;
       }
     }
 
@@ -153,15 +159,12 @@ function createBot() {
     }
   });
 
-  // 🔥 MAIN FIX
   bot.on("kicked", (reason) => {
     console.log("Kicked:", reason);
 
     const msg = reason.toString().toLowerCase();
 
     if (msg.includes("already playing")) {
-      console.log("🛑 Ghost session → LOCK 60s");
-
       reconnectLocked = true;
 
       setTimeout(() => {
@@ -175,7 +178,6 @@ function createBot() {
       msg.includes("whitelist") ||
       msg.includes("not allowed")
     ) {
-      console.log("❌ No reconnect allowed");
       shouldReconnect = false;
     }
   });
@@ -185,15 +187,9 @@ function createBot() {
   bot.on("end", () => {
     console.log("Bot disconnected");
 
-    if (jumpInterval) clearInterval(jumpInterval);
-
     if (!shouldReconnect) return;
     if (reconnectTimeout) return;
-
-    if (reconnectLocked) {
-      console.log("⏳ Waiting for session clear...");
-      return;
-    }
+    if (reconnectLocked) return;
 
     reconnectAttempts++;
 
