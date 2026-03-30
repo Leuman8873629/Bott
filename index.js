@@ -21,7 +21,7 @@ function createBot() {
   console.log("Starting bot...");
 
   bot = mineflayer.createBot({
-    host: "Tomanreturns.aternos.me:37089",
+    host: "Tomanreturns.aternos.me",
     port: 37089,
     username: "chatpata_momo",
     version: "1.21.11" // FIX 1: was "1.21.11" (invalid version string)
@@ -39,7 +39,7 @@ function createBot() {
 
     // Try login after join
     setTimeout(() => {
-      // bot.chat("/login botwa123123");
+       bot.chat("/login botwa123123");
     }, 3000);
 
     // FIX 2: Anti-AFK jump — skip if in combat or moving to avoid position desync
