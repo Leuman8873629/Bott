@@ -1,55 +1,165 @@
+const express = require("express");
 const mineflayer = require("mineflayer");
+const pvp = require("mineflayer-pvp").plugin;
+const { pathfinder, Movements, goals } = require("mineflayer-pathfinder");
+const armorManager = require("mineflayer-armor-manager");
+const mcDataLoader = require("minecraft-data");
+
+const app = express();
+const PORT = process.env.PORT || 3000;
+
+// Keep Railway service alive
+app.get("/", (req, res) => res.send("Minecraft Bot Running"));
+app.listen(PORT, "0.0.0.0", () => {
+  console.log("Web server running on port " + PORT);
+});
+
+let bot;
+let jumpInterval;
 
 function createBot() {
-  const bot = mineflayer.createBot({
-    host: "Tomanreturns.aternos.me", // e.g. play.example.com
-    port: 37089,
-    username: "AFK_Bot_01"
+  console.log("Starting bot...");
+
+  bot = mineflayer.createBot({
+    host: "Season_four.aternos.me",
+    port: 32675,
+    username: "chatpata_bhaaluu",
+    version: "1.21.11"
   });
 
-  bot.on("spawn", () => {
-    console.log("✅ Bot joined server");
+  bot.loadPlugin(pvp);
+  bot.loadPlugin(armorManager);
+  bot.loadPlugin(pathfinder);
 
-    startAFK(bot);
+  let guardPos = null;
+  const mcData = mcDataLoader(bot.version);
+
+  bot.once("spawn", () => {
+    console.log("Bot joined server");
+
+    // Try login after join
+    setTimeout(() => {
+     // bot.chat("/login botwa123123");
+    }, 3000);
+
+    // Anti AFK
+    jumpInterval = setInterval(() => {
+      if (!bot?.entity) return;
+
+      bot.setControlState("jump", true);
+      setTimeout(() => bot.setControlState("jump", false), 120);
+
+    }, 10000);
   });
+
+  // Detect register/login messages
+  bot.on("message", (msg) => {
+    const text = msg.toString().toLowerCase();
+
+    if (text.includes("register")) {
+      setTimeout(() => {
+        bot.chat("/register botwa123123 botwa123123");
+      }, 1000);
+    }
+
+    if (text.includes("login")) {
+      setTimeout(() => {
+       bot.chat("/login botwa123123");
+     }, 1000);
+    }
+  });
+
+  // Auto equip sword and shield
+  bot.on("playerCollect", (collector) => {
+    if (collector !== bot.entity) return;
+
+    setTimeout(() => {
+      const sword = bot.inventory.items().find(i => i.name.includes("sword"));
+      if (sword) bot.equip(sword, "hand").catch(() => {});
+
+      const shield = bot.inventory.items().find(i => i.name.includes("shield"));
+      if (shield) bot.equip(shield, "off-hand").catch(() => {});
+    }, 300);
+  });
+
+  function guardArea(pos) {
+    guardPos = pos.clone();
+    if (!bot.pvp.target) moveToGuardPos();
+  }
+
+  function stopGuarding() {
+    guardPos = null;
+    bot.pvp.stop();
+    bot.pathfinder.setGoal(null);
+  }
+
+  function moveToGuardPos() {
+    if (!guardPos) return;
+
+    const movements = new Movements(bot, mcData);
+    bot.pathfinder.setMovements(movements);
+
+    bot.pathfinder.setGoal(
+      new goals.GoalBlock(guardPos.x, guardPos.y, guardPos.z)
+    );
+  }
+
+  bot.on("stoppedAttacking", () => {
+    if (guardPos) moveToGuardPos();
+  });
+
+  // AI loop
+  bot.on("physicsTick", () => {
+    if (!bot?.entity) return;
+
+    if (!bot.pvp.target && !bot.pathfinder.isMoving()) {
+      const entity = bot.nearestEntity();
+      if (entity) {
+        bot.lookAt(entity.position.offset(0, entity.height, 0), true).catch(() => {});
+      }
+    }
+
+    if (guardPos) {
+      const mob = bot.nearestEntity(e =>
+        e.type === "mob" &&
+        e.mobType !== "Armor Stand" &&
+        e.position.distanceTo(bot.entity.position) < 16
+      );
+
+      if (mob) bot.pvp.attack(mob);
+    }
+  });
+
+  // Chat commands
+  bot.on("chat", (username, message) => {
+    if (username === bot.username) return;
+
+    if (message === "guard") {
+      const player = bot.players[username];
+      if (player?.entity) {
+        bot.chat("Guarding this area!");
+        guardArea(player.entity.position);
+      }
+    }
+
+    if (message === "stop") {
+      bot.chat("Stopping guard!");
+      stopGuarding();
+    }
+  });
+
+  bot.on("kicked", reason => console.log("Kicked:", reason));
+  bot.on("error", err => console.log("Error:", err.message));
 
   bot.on("end", () => {
-    console.log("❌ Disconnected... reconnecting in 5s");
-    setTimeout(createBot, 5000);
-  });
-
-  bot.on("error", (err) => {
-    console.log("Error:", err.message);
+    console.log("Bot disconnected");
+    if (jumpInterval) clearInterval(jumpInterval);
   });
 }
 
-function startAFK(bot) {
-  setInterval(() => {
-    // Random movement
-    const actions = ["forward", "back", "left", "right"];
-
-    const action = actions[Math.floor(Math.random() * actions.length)];
-    bot.setControlState(action, true);
-
-    // Stop after random time
-    setTimeout(() => {
-      bot.setControlState(action, false);
-    }, Math.random() * 2000 + 500);
-
-    // Jump sometimes
-    if (Math.random() < 0.3) bot.setControlState("jump", true);
-    setTimeout(() => bot.setControlState("jump", false), 500);
-
-    // Sneak sometimes
-    if (Math.random() < 0.2) bot.setControlState("sneak", true);
-    setTimeout(() => bot.setControlState("sneak", false), 1000);
-
-    // Look around randomly
-    const yaw = Math.random() * Math.PI * 2;
-    const pitch = (Math.random() - 0.5) * Math.PI;
-    bot.look(yaw, pitch, true);
-
-  }, 3000);
-}
+process.on("uncaughtException", err => {
+  console.log("Uncaught Error:", err);
+});
 
 createBot();
+                                               
