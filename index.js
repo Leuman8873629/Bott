@@ -21,11 +21,9 @@ setInterval(() => {
 let bot = null;
 let reconnectTimeout = null;
 let isConnecting = false;
-let isConnected = false;
 
-// ===== CREATE BOT =====
 function createBot() {
-  if (isConnecting || isConnected) return;
+  if (isConnecting) return;
   isConnecting = true;
 
   console.log("🚀 Starting bot...");
@@ -41,7 +39,7 @@ function createBot() {
     host: "Tomanreturns.aternos.me",
     port: 37089,
     username: "rioBekasdfsi",
-    version: false, // ✅ AUTO VERSION FIX
+    version: "1.21.11",
     plugins: [AutoAuth],
     AutoAuth: { password: "bot112022" }
   });
@@ -52,42 +50,45 @@ function createBot() {
 
   let guardPos = null;
   let lastHit = 0;
-  let moveState = null;
+  let moveInterval;
 
   // ===== SPAWN =====
   bot.on("spawn", () => {
     console.log("✅ Bot joined");
-
     isConnecting = false;
-    isConnected = true;
 
     if (reconnectTimeout) {
       clearTimeout(reconnectTimeout);
       reconnectTimeout = null;
     }
+
+    // 🔥 MICRO MOVEMENT (FIX FREEZE)
+    if (moveInterval) clearInterval(moveInterval);
+
+    moveInterval = setInterval(() => {
+      if (!bot.entity) return;
+
+      const actions = ["forward", "back", "left", "right"];
+      const action = actions[Math.floor(Math.random() * actions.length)];
+
+      bot.setControlState(action, true);
+
+      setTimeout(() => {
+        bot.setControlState(action, false);
+      }, 300);
+
+    }, 3000);
+
+    // 👀 HEAD MOVEMENT (human-like)
+    setInterval(() => {
+      if (!bot.entity) return;
+
+      const yaw = bot.entity.yaw + (Math.random() - 0.5) * 0.5;
+      const pitch = bot.entity.pitch + (Math.random() - 0.5) * 0.2;
+
+      bot.look(yaw, pitch, true);
+    }, 4000);
   });
-
-  // ===== REAL MOVEMENT (FIX STATUE) =====
-  bot.on("physicsTick", () => {
-    if (!bot.entity) return;
-
-    if (Math.random() < 0.02) {
-      const actions = ["forward", "back", "left", "right", null];
-      moveState = actions[Math.floor(Math.random() * actions.length)];
-    }
-
-    bot.setControlState("forward", false);
-    bot.setControlState("back", false);
-    bot.setControlState("left", false);
-    bot.setControlState("right", false);
-
-    if (moveState) {
-      bot.setControlState(moveState, true);
-    }
-  });
-
-  // small sync helper
-  bot.on("move", () => {});
 
   // ===== HIT REACTION =====
   bot.on("entityHurt", (entity) => {
@@ -95,6 +96,7 @@ function createBot() {
 
     lastHit = Date.now();
 
+    // small knockback reaction
     bot.setControlState("back", true);
     setTimeout(() => {
       bot.setControlState("back", false);
@@ -114,7 +116,7 @@ function createBot() {
     }, 200);
   });
 
-  // ===== GUARD SYSTEM =====
+  // ===== GUARD =====
   function guardArea(pos) {
     guardPos = pos.clone();
     moveToGuardPos();
@@ -159,6 +161,7 @@ function createBot() {
 
       if (mob) bot.pvp.attack(mob);
     }
+
   }, 500);
 
   // ===== CHAT =====
@@ -184,35 +187,29 @@ function createBot() {
     const msg = reason.toString().toLowerCase();
     console.log("❌ Kicked:", msg);
 
-    isConnected = false;
-
     if (msg.includes("already playing")) {
-      console.log("⚠️ Already online, skipping reconnect");
-      return;
+      console.log("⏳ Waiting 30s...");
+      return setTimeout(safeReconnect, 30000);
     }
 
     safeReconnect();
   });
 
-  // ===== ERROR =====
   bot.on("error", (err) => {
     console.log("⚠️ Error:", err.message);
   });
 
-  // ===== END =====
   bot.on("end", () => {
     console.log("🔌 Disconnected");
-
-    isConnected = false;
     safeReconnect();
   });
 }
 
 // ===== RECONNECT =====
 function safeReconnect() {
-  if (reconnectTimeout || isConnected || isConnecting) return;
+  if (reconnectTimeout) return;
 
-  console.log("🔁 Reconnecting in 15s...");
+  isConnecting = false;
 
   reconnectTimeout = setTimeout(() => {
     reconnectTimeout = null;
