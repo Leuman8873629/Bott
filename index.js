@@ -24,7 +24,7 @@ function createBot() {
     host: "Season_four.aternos.me",
     port: 32675,
     username: "chatpata_bhaaluu",
-    version: "1.21.11"
+    version: "1.21.1" // FIX 1: was "1.21.11" (invalid version string)
   });
 
   bot.loadPlugin(pvp);
@@ -39,17 +39,21 @@ function createBot() {
 
     // Try login after join
     setTimeout(() => {
-     // bot.chat("/login botwa123123");
+      // bot.chat("/login botwa123123");
     }, 3000);
 
-    // Anti AFK
+    // FIX 2: Anti-AFK jump — skip if in combat or moving to avoid position desync
     jumpInterval = setInterval(() => {
       if (!bot?.entity) return;
+      if (bot.pvp.target) return;           // skip during combat
+      if (bot.pathfinder.isMoving()) return; // skip while pathfinding
 
       bot.setControlState("jump", true);
-      setTimeout(() => bot.setControlState("jump", false), 120);
+      setTimeout(() => {
+        if (bot?.entity) bot.setControlState("jump", false);
+      }, 120);
 
-    }, 10000);
+    }, 30000); // increased from 10s to 30s to reduce packet spam
   });
 
   // Detect register/login messages
@@ -64,8 +68,8 @@ function createBot() {
 
     if (text.includes("login")) {
       setTimeout(() => {
-       bot.chat("/login botwa123123");
-     }, 1000);
+        bot.chat("/login botwa123123");
+      }, 1000);
     }
   });
 
@@ -126,7 +130,11 @@ function createBot() {
         e.position.distanceTo(bot.entity.position) < 16
       );
 
-      if (mob) bot.pvp.attack(mob);
+      if (mob) {
+        // FIX 3: Stop pathfinder before attacking to prevent movement packet conflict
+        bot.pathfinder.setGoal(null);
+        bot.pvp.attack(mob);
+      }
     }
   });
 
@@ -162,4 +170,3 @@ process.on("uncaughtException", err => {
 });
 
 createBot();
-                                               
