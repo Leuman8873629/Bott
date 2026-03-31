@@ -10,37 +10,17 @@ const app = express();
 app.get("/", (_, res) => res.send("Bot running"));
 app.listen(process.env.PORT || 3000);
 
-// ===== KEEP ALIVE =====
+// keep alive
 setInterval(() => {
   if (process.env.PROJECT_DOMAIN) {
     http.get(`http://${process.env.PROJECT_DOMAIN}.repl.co/`);
   }
 }, 240000);
 
-// ===== GLOBAL =====
 let bot = null;
-let reconnectTimeout = null;
-let isConnecting = false;
-let isConnected = false;
-let blocked = false; // 🚫 HARD STOP
 
 function createBot() {
-  // 🚫 HARD BLOCK
-  if (blocked || isConnecting || isConnected) {
-    console.log("⚠️ Blocked / Already active, skipping...");
-    return;
-  }
-
-  isConnecting = true;
-
   console.log("🚀 Starting bot...");
-
-  if (bot) {
-    try {
-      bot.removeAllListeners();
-      bot.quit();
-    } catch {}
-  }
 
   bot = mineflayer.createBot({
     host: "Tomanreturns.aternos.me",
@@ -55,23 +35,13 @@ function createBot() {
   bot.loadPlugin(armorManager);
   bot.loadPlugin(pathfinder);
 
-  let guardPos = null;
-  let lastHit = 0;
   let moveInterval;
   let lookInterval;
 
-  // ===== SPAWN =====
   bot.once("spawn", () => {
     console.log("✅ Bot joined");
 
-    isConnecting = false;
-    isConnected = true;
-
-    if (reconnectTimeout) {
-      clearTimeout(reconnectTimeout);
-      reconnectTimeout = null;
-    }
-
+    // movement
     moveInterval = setInterval(() => {
       if (!bot.entity) return;
 
@@ -82,6 +52,7 @@ function createBot() {
       setTimeout(() => bot.setControlState(action, false), 300);
     }, 3000);
 
+    // head movement
     lookInterval = setInterval(() => {
       if (!bot.entity) return;
 
@@ -92,49 +63,15 @@ function createBot() {
     }, 4000);
   });
 
-  // ===== CLEANUP =====
-  function cleanup() {
-    console.log("🧹 Cleaning up...");
-
-    isConnected = false;
-    isConnecting = false;
-
-    try {
-      bot.removeAllListeners();
-      bot.quit();
-    } catch {}
-  }
-
-  // ===== EVENTS =====
+  // ===== EVENTS (NO RECONNECT) =====
   bot.on("kicked", (reason) => {
-    const msg = reason.toString().toLowerCase();
-    console.log("❌ Kicked:", msg);
-
-    cleanup();
-
-    // 🚫 PERMANENT STOP
-    if (msg.includes("already playing")) {
-      console.log("🛑 Bot already online — STOPPING reconnect");
-
-      blocked = true;
-
-      // 🧠 OPTIONAL: auto retry after 2 minutes
-      setTimeout(() => {
-        console.log("🔄 Retrying after cooldown...");
-        blocked = false;
-        createBot();
-      }, 120000);
-
-      return;
-    }
-
-    safeReconnect();
+    console.log("❌ Kicked:", reason.toString());
+    console.log("🛑 Bot stopped. Restart manually.");
   });
 
   bot.on("end", () => {
     console.log("🔌 Disconnected");
-    cleanup();
-    safeReconnect();
+    console.log("🛑 Bot stopped. Restart manually.");
   });
 
   bot.on("error", (err) => {
@@ -142,25 +79,5 @@ function createBot() {
   });
 }
 
-// ===== RECONNECT =====
-function safeReconnect() {
-  if (reconnectTimeout) return;
-
-  if (blocked) {
-    console.log("🛑 Reconnect blocked");
-    return;
-  }
-
-  if (isConnected || isConnecting) {
-    console.log("⚠️ Still active, no reconnect");
-    return;
-  }
-
-  reconnectTimeout = setTimeout(() => {
-    reconnectTimeout = null;
-    createBot();
-  }, 15000);
-}
-
-// START
+// start once
 createBot();
