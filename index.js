@@ -10,7 +10,7 @@ const app = express();
 app.get("/", (_, res) => res.send("Bot running"));
 app.listen(process.env.PORT || 3000);
 
-// keep alive
+// ===== KEEP ALIVE =====
 setInterval(() => {
   if (process.env.PROJECT_DOMAIN) {
     http.get(`http://${process.env.PROJECT_DOMAIN}.repl.co/`);
@@ -21,9 +21,15 @@ setInterval(() => {
 let bot = null;
 let reconnectTimeout = null;
 let isConnecting = false;
+let isConnected = false; // 🔥 NEW
 
 function createBot() {
-  if (isConnecting) return;
+  // 🚫 HARD BLOCK (no double join)
+  if (isConnecting || isConnected) {
+    console.log("⚠️ Already connected/connecting, skipping...");
+    return;
+  }
+
   isConnecting = true;
 
   console.log("🚀 Starting bot...");
@@ -51,20 +57,21 @@ function createBot() {
   let guardPos = null;
   let lastHit = 0;
   let moveInterval;
+  let lookInterval;
 
   // ===== SPAWN =====
-  bot.on("spawn", () => {
+  bot.once("spawn", () => {
     console.log("✅ Bot joined");
+
     isConnecting = false;
+    isConnected = true;
 
     if (reconnectTimeout) {
       clearTimeout(reconnectTimeout);
       reconnectTimeout = null;
     }
 
-    // 🔥 MICRO MOVEMENT (FIX FREEZE)
-    if (moveInterval) clearInterval(moveInterval);
-
+    // 🔥 MICRO MOVEMENT
     moveInterval = setInterval(() => {
       if (!bot.entity) return;
 
@@ -72,15 +79,11 @@ function createBot() {
       const action = actions[Math.floor(Math.random() * actions.length)];
 
       bot.setControlState(action, true);
-
-      setTimeout(() => {
-        bot.setControlState(action, false);
-      }, 300);
-
+      setTimeout(() => bot.setControlState(action, false), 300);
     }, 3000);
 
-    // 👀 HEAD MOVEMENT (human-like)
-    setInterval(() => {
+    // 👀 HEAD MOVEMENT
+    lookInterval = setInterval(() => {
       if (!bot.entity) return;
 
       const yaw = bot.entity.yaw + (Math.random() - 0.5) * 0.5;
@@ -96,11 +99,8 @@ function createBot() {
 
     lastHit = Date.now();
 
-    // small knockback reaction
     bot.setControlState("back", true);
-    setTimeout(() => {
-      bot.setControlState("back", false);
-    }, 400);
+    setTimeout(() => bot.setControlState("back", false), 400);
   });
 
   // ===== AUTO EQUIP =====
@@ -133,7 +133,6 @@ function createBot() {
 
     const mcData = require("minecraft-data")(bot.version);
     bot.pathfinder.setMovements(new Movements(bot, mcData));
-
     bot.pathfinder.setGoal(
       new goals.GoalBlock(guardPos.x, guardPos.y, guardPos.z)
     );
@@ -150,7 +149,6 @@ function createBot() {
   // ===== SAFE AI LOOP =====
   setInterval(() => {
     if (!bot.entity) return;
-
     if (Date.now() - lastHit < 1200) return;
 
     if (guardPos && !bot.pvp.target) {
@@ -161,7 +159,6 @@ function createBot() {
 
       if (mob) bot.pvp.attack(mob);
     }
-
   }, 500);
 
   // ===== CHAT =====
@@ -182,34 +179,51 @@ function createBot() {
     }
   });
 
-  // ===== KICK =====
-  bot.on("kicked", (reason) => {
-    const msg = reason.toString().toLowerCase();
-    console.log("❌ Kicked:", msg);
+  // ===== CLEAN DISCONNECT =====
+  function cleanup() {
+    console.log("🧹 Cleaning up...");
 
-    if (msg.includes("already playing")) {
-      console.log("⏳ Waiting 30s...");
+    isConnected = false;
+    isConnecting = false;
+
+    try {
+      bot.removeAllListeners();
+      bot.quit();
+    } catch {}
+  }
+
+  // ===== EVENTS =====
+  bot.on("kicked", (reason) => {
+    console.log("❌ Kicked:", reason.toString());
+    cleanup();
+
+    if (reason.toString().toLowerCase().includes("already playing")) {
       return setTimeout(safeReconnect, 30000);
     }
 
     safeReconnect();
   });
 
+  bot.on("end", () => {
+    console.log("🔌 Disconnected");
+    cleanup();
+    safeReconnect();
+  });
+
   bot.on("error", (err) => {
     console.log("⚠️ Error:", err.message);
   });
-
-  bot.on("end", () => {
-    console.log("🔌 Disconnected");
-    safeReconnect();
-  });
 }
 
-// ===== RECONNECT =====
+// ===== SMART RECONNECT =====
 function safeReconnect() {
   if (reconnectTimeout) return;
 
-  isConnecting = false;
+  // 🚫 FINAL SAFETY
+  if (isConnected || isConnecting) {
+    console.log("⚠️ Reconnect blocked (still active)");
+    return;
+  }
 
   reconnectTimeout = setTimeout(() => {
     reconnectTimeout = null;
@@ -217,4 +231,5 @@ function safeReconnect() {
   }, 15000);
 }
 
+// START
 createBot();
