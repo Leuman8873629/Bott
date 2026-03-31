@@ -21,12 +21,13 @@ setInterval(() => {
 let bot = null;
 let reconnectTimeout = null;
 let isConnecting = false;
-let isConnected = false; // 🔥 NEW
+let isConnected = false;
+let blocked = false; // 🚫 HARD STOP
 
 function createBot() {
-  // 🚫 HARD BLOCK (no double join)
-  if (isConnecting || isConnected) {
-    console.log("⚠️ Already connected/connecting, skipping...");
+  // 🚫 HARD BLOCK
+  if (blocked || isConnecting || isConnected) {
+    console.log("⚠️ Blocked / Already active, skipping...");
     return;
   }
 
@@ -71,7 +72,6 @@ function createBot() {
       reconnectTimeout = null;
     }
 
-    // 🔥 MICRO MOVEMENT
     moveInterval = setInterval(() => {
       if (!bot.entity) return;
 
@@ -82,7 +82,6 @@ function createBot() {
       setTimeout(() => bot.setControlState(action, false), 300);
     }, 3000);
 
-    // 👀 HEAD MOVEMENT
     lookInterval = setInterval(() => {
       if (!bot.entity) return;
 
@@ -93,93 +92,7 @@ function createBot() {
     }, 4000);
   });
 
-  // ===== HIT REACTION =====
-  bot.on("entityHurt", (entity) => {
-    if (entity !== bot.entity) return;
-
-    lastHit = Date.now();
-
-    bot.setControlState("back", true);
-    setTimeout(() => bot.setControlState("back", false), 400);
-  });
-
-  // ===== AUTO EQUIP =====
-  bot.on("playerCollect", (collector) => {
-    if (collector !== bot.entity) return;
-
-    setTimeout(() => {
-      const sword = bot.inventory.items().find(i => i.name.includes("sword"));
-      if (sword) bot.equip(sword, "hand").catch(() => {});
-
-      const shield = bot.inventory.items().find(i => i.name.includes("shield"));
-      if (shield) bot.equip(shield, "off-hand").catch(() => {});
-    }, 200);
-  });
-
-  // ===== GUARD =====
-  function guardArea(pos) {
-    guardPos = pos.clone();
-    moveToGuardPos();
-  }
-
-  function stopGuarding() {
-    guardPos = null;
-    bot.pvp.stop();
-    bot.pathfinder.setGoal(null);
-  }
-
-  function moveToGuardPos() {
-    if (!guardPos) return;
-
-    const mcData = require("minecraft-data")(bot.version);
-    bot.pathfinder.setMovements(new Movements(bot, mcData));
-    bot.pathfinder.setGoal(
-      new goals.GoalBlock(guardPos.x, guardPos.y, guardPos.z)
-    );
-  }
-
-  bot.on("startedAttacking", () => {
-    bot.pathfinder.setGoal(null);
-  });
-
-  bot.on("stoppedAttacking", () => {
-    if (guardPos) moveToGuardPos();
-  });
-
-  // ===== SAFE AI LOOP =====
-  setInterval(() => {
-    if (!bot.entity) return;
-    if (Date.now() - lastHit < 1200) return;
-
-    if (guardPos && !bot.pvp.target) {
-      const mob = bot.nearestEntity(e =>
-        e.type === "mob" &&
-        e.position.distanceTo(bot.entity.position) < 8
-      );
-
-      if (mob) bot.pvp.attack(mob);
-    }
-  }, 500);
-
-  // ===== CHAT =====
-  bot.on("chat", (username, message) => {
-    if (username === bot.username) return;
-
-    if (message === "guard") {
-      const player = bot.players[username];
-      if (player?.entity) {
-        bot.chat("Guarding!");
-        guardArea(player.entity.position);
-      }
-    }
-
-    if (message === "stop") {
-      bot.chat("Stopped!");
-      stopGuarding();
-    }
-  });
-
-  // ===== CLEAN DISCONNECT =====
+  // ===== CLEANUP =====
   function cleanup() {
     console.log("🧹 Cleaning up...");
 
@@ -194,11 +107,25 @@ function createBot() {
 
   // ===== EVENTS =====
   bot.on("kicked", (reason) => {
-    console.log("❌ Kicked:", reason.toString());
+    const msg = reason.toString().toLowerCase();
+    console.log("❌ Kicked:", msg);
+
     cleanup();
 
-    if (reason.toString().toLowerCase().includes("already playing")) {
-      return setTimeout(safeReconnect, 30000);
+    // 🚫 PERMANENT STOP
+    if (msg.includes("already playing")) {
+      console.log("🛑 Bot already online — STOPPING reconnect");
+
+      blocked = true;
+
+      // 🧠 OPTIONAL: auto retry after 2 minutes
+      setTimeout(() => {
+        console.log("🔄 Retrying after cooldown...");
+        blocked = false;
+        createBot();
+      }, 120000);
+
+      return;
     }
 
     safeReconnect();
@@ -215,13 +142,17 @@ function createBot() {
   });
 }
 
-// ===== SMART RECONNECT =====
+// ===== RECONNECT =====
 function safeReconnect() {
   if (reconnectTimeout) return;
 
-  // 🚫 FINAL SAFETY
+  if (blocked) {
+    console.log("🛑 Reconnect blocked");
+    return;
+  }
+
   if (isConnected || isConnecting) {
-    console.log("⚠️ Reconnect blocked (still active)");
+    console.log("⚠️ Still active, no reconnect");
     return;
   }
 
