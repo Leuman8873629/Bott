@@ -7,7 +7,7 @@ const app = express();
 app.get("/", (_, res) => res.send("Bot running"));
 app.listen(process.env.PORT || 3000);
 
-// keep alive (optional)
+// keep alive
 setInterval(() => {
   if (process.env.PROJECT_DOMAIN) {
     http.get(`http://${process.env.PROJECT_DOMAIN}.repl.co/`);
@@ -15,15 +15,20 @@ setInterval(() => {
 }, 240000);
 
 let bot = null;
+let movementLoop = null;
+let reconnecting = false;
 
 function createBot() {
+  if (reconnecting) return;
+  reconnecting = true;
+
   console.log("🚀 Starting bot...");
 
   // 🧹 CLEAN OLD BOT
   if (bot) {
     try {
-      bot.end();
       bot.removeAllListeners();
+      bot.quit();
     } catch {}
     bot = null;
   }
@@ -31,8 +36,8 @@ function createBot() {
   bot = mineflayer.createBot({
     host: "Tomanreturns.aternos.me",
     port: 37089,
-    username: "rioBekasdfsi", // change if needed
-    version: false, // auto detect version
+    username: "rioBekasdfsi",
+    version: false,
     plugins: [AutoAuth],
     AutoAuth: {
       password: "bot112022",
@@ -42,41 +47,20 @@ function createBot() {
 
   // ===== EVENTS =====
 
-  bot.on("login", () => {
+  bot.once("login", () => {
     console.log("🔐 Logged in");
   });
 
-  bot.on("spawn", () => {
+  bot.once("spawn", () => {
     console.log("✅ Bot joined successfully!");
+    reconnecting = false;
 
-    // 🔥 SAFE MICRO MOVEMENT
-    setInterval(() => {
-      if (!bot.entity) return;
-
-      const actions = ["forward", "back", "left", "right"];
-      const action = actions[Math.floor(Math.random() * actions.length)];
-
-      bot.setControlState(action, true);
-
-      setTimeout(() => {
-        bot.setControlState(action, false);
-      }, 200);
-    }, 4000);
-
-    // 👀 SAFE HEAD MOVEMENT
-    setInterval(() => {
-      if (!bot.entity) return;
-
-      const yaw = bot.entity.yaw + (Math.random() - 0.5) * 0.3;
-      const pitch = bot.entity.pitch + (Math.random() - 0.5) * 0.1;
-
-      bot.look(yaw, pitch, true);
-    }, 5000);
+    startMovement();
   });
 
   bot.on("kicked", (reason) => {
     console.log("❌ Kicked:", reason.toString());
-    console.log("🛑 Bot stopped. Restart manually.");
+    safeReconnect();
   });
 
   bot.on("error", (err) => {
@@ -85,9 +69,82 @@ function createBot() {
 
   bot.on("end", () => {
     console.log("🔌 Disconnected");
-    console.log("🛑 Bot stopped. Restart manually.");
+    safeReconnect();
   });
 }
 
-// start once
+// ================= MOVEMENT =================
+
+function startMovement() {
+  stopMovement();
+
+  function loop() {
+    if (!bot || !bot.entity) return;
+
+    try {
+      // 🎮 random walk
+      const actions = ["forward", "back", "left", "right"];
+      const action = actions[Math.floor(Math.random() * actions.length)];
+      const duration = 300 + Math.random() * 700;
+
+      bot.setControlState(action, true);
+
+      setTimeout(() => {
+        if (!bot) return;
+        bot.setControlState(action, false);
+      }, duration);
+
+      // 🦘 jump (low chance)
+      if (Math.random() < 0.25) {
+        bot.setControlState("jump", true);
+        setTimeout(() => bot.setControlState("jump", false), 250);
+      }
+
+      // 🥷 sneak (very low chance)
+      if (Math.random() < 0.15) {
+        bot.setControlState("sneak", true);
+        setTimeout(() => bot.setControlState("sneak", false), 600);
+      }
+
+      // 👀 smooth look
+      const yaw = bot.entity.yaw + (Math.random() - 0.5) * 0.6;
+      const pitch = bot.entity.pitch + (Math.random() - 0.5) * 0.3;
+      bot.look(yaw, pitch, true);
+
+    } catch (e) {
+      console.log("Movement error:", e.message);
+    }
+
+    const next = 2500 + Math.random() * 5000;
+    movementLoop = setTimeout(loop, next);
+  }
+
+  loop();
+}
+
+function stopMovement() {
+  if (movementLoop) {
+    clearTimeout(movementLoop);
+    movementLoop = null;
+  }
+}
+
+// ================= SAFE RECONNECT =================
+
+function safeReconnect() {
+  stopMovement();
+
+  if (reconnecting) return;
+
+  reconnecting = true;
+
+  console.log("🔄 Reconnecting in 10 seconds...");
+
+  setTimeout(() => {
+    reconnecting = false;
+    createBot();
+  }, 10000); // enough delay to avoid "same username" bug
+}
+
+// start
 createBot();
