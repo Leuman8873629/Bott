@@ -15,7 +15,6 @@ setInterval(() => {
 }, 240000);
 
 let bot = null;
-let movementLoop = null;
 let reconnecting = false;
 
 function createBot() {
@@ -24,7 +23,7 @@ function createBot() {
 
   console.log("🚀 Starting bot...");
 
-  // 🧹 CLEAN OLD BOT
+  // cleanup old bot
   if (bot) {
     try {
       bot.removeAllListeners();
@@ -36,7 +35,7 @@ function createBot() {
   bot = mineflayer.createBot({
     host: "Tomanreturns.aternos.me",
     port: 37089,
-    username: "rioBekasdfsi",
+    username: "heheh_botwa", // ✅ changed name
     version: false,
     plugins: [AutoAuth],
     AutoAuth: {
@@ -44,8 +43,6 @@ function createBot() {
       logging: true
     }
   });
-
-  // ===== EVENTS =====
 
   bot.once("login", () => {
     console.log("🔐 Logged in");
@@ -55,7 +52,7 @@ function createBot() {
     console.log("✅ Bot joined successfully!");
     reconnecting = false;
 
-    startMovement();
+    startIdle(); // 👇 only idle, no movement spam
   });
 
   bot.on("kicked", (reason) => {
@@ -73,67 +70,27 @@ function createBot() {
   });
 }
 
-// ================= MOVEMENT =================
+// ================= IDLE (NO MOVEMENT SPAM) =================
 
-function startMovement() {
-  stopMovement();
-
-  function loop() {
+function startIdle() {
+  setInterval(() => {
     if (!bot || !bot.entity) return;
 
     try {
-      // 🎮 random walk
-      const actions = ["forward", "back", "left", "right"];
-      const action = actions[Math.floor(Math.random() * actions.length)];
-      const duration = 300 + Math.random() * 700;
-
-      bot.setControlState(action, true);
-
-      setTimeout(() => {
-        if (!bot) return;
-        bot.setControlState(action, false);
-      }, duration);
-
-      // 🦘 jump (low chance)
-      if (Math.random() < 0.25) {
-        bot.setControlState("jump", true);
-        setTimeout(() => bot.setControlState("jump", false), 250);
-      }
-
-      // 🥷 sneak (very low chance)
-      if (Math.random() < 0.15) {
-        bot.setControlState("sneak", true);
-        setTimeout(() => bot.setControlState("sneak", false), 600);
-      }
-
-      // 👀 smooth look
-      const yaw = bot.entity.yaw + (Math.random() - 0.5) * 0.6;
+      // 👀 just look around occasionally
+      const yaw = bot.entity.yaw + (Math.random() - 0.5) * 0.5;
       const pitch = bot.entity.pitch + (Math.random() - 0.5) * 0.3;
       bot.look(yaw, pitch, true);
 
     } catch (e) {
-      console.log("Movement error:", e.message);
+      console.log("Idle error:", e.message);
     }
-
-    const next = 2500 + Math.random() * 5000;
-    movementLoop = setTimeout(loop, next);
-  }
-
-  loop();
-}
-
-function stopMovement() {
-  if (movementLoop) {
-    clearTimeout(movementLoop);
-    movementLoop = null;
-  }
+  }, 4000);
 }
 
 // ================= SAFE RECONNECT =================
 
 function safeReconnect() {
-  stopMovement();
-
   if (reconnecting) return;
 
   reconnecting = true;
@@ -143,7 +100,7 @@ function safeReconnect() {
   setTimeout(() => {
     reconnecting = false;
     createBot();
-  }, 10000); // enough delay to avoid "same username" bug
+  }, 10000);
 }
 
 // start
