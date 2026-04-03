@@ -17,6 +17,7 @@ setInterval(() => {
 let bot = null;
 let reconnecting = false;
 let idleLoop = null;
+let jumping = false;
 
 function createBot() {
   if (reconnecting) return;
@@ -56,6 +57,15 @@ function createBot() {
     startIdle();
   });
 
+  bot.on("physicsTick", () => {
+    // 🦘 PHYSICS-BASED JUMP (REAL FIX)
+    if (!bot || !bot.entity) return;
+
+    if (jumping) {
+      bot.setControlState("jump", true);
+    }
+  });
+
   bot.on("kicked", (reason) => {
     console.log("❌ Kicked:", reason.toString());
     safeReconnect();
@@ -80,27 +90,26 @@ function startIdle() {
     if (!bot || !bot.entity) return;
 
     try {
-      // 👀 smooth look around
+      // 👀 look around
       const yaw = bot.entity.yaw + (Math.random() - 0.5) * 0.6;
       const pitch = bot.entity.pitch + (Math.random() - 0.5) * 0.3;
       bot.look(yaw, pitch, true);
 
-      // 🦘 random jump (natural)
-      if (Math.random() < 0.3 && bot.entity.onGround) {
-        bot.setControlState("jump", true);
+      // 🦘 TRIGGER JUMP (reliable)
+      if (!jumping && Math.random() < 0.6) {
+        jumping = true;
 
         setTimeout(() => {
-          if (!bot) return;
-          bot.setControlState("jump", false);
-        }, 180);
+          jumping = false;
+          if (bot) bot.setControlState("jump", false);
+        }, 400); // hold jump properly
       }
 
     } catch (e) {
       console.log("Idle error:", e.message);
     }
 
-    // next action delay (human-like)
-    const next = 3000 + Math.random() * 4000;
+    const next = 2500 + Math.random() * 3500;
     idleLoop = setTimeout(loop, next);
   }
 
