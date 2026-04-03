@@ -16,6 +16,7 @@ setInterval(() => {
 
 let bot = null;
 let reconnecting = false;
+let idleLoop = null;
 
 function createBot() {
   if (reconnecting) return;
@@ -35,7 +36,7 @@ function createBot() {
   bot = mineflayer.createBot({
     host: "Tomanreturns.aternos.me",
     port: 37089,
-    username: "heheh_botwa", // ✅ changed name
+    username: "heheh_botwa",
     version: false,
     plugins: [AutoAuth],
     AutoAuth: {
@@ -52,7 +53,7 @@ function createBot() {
     console.log("✅ Bot joined successfully!");
     reconnecting = false;
 
-    startIdle(); // 👇 only idle, no movement spam
+    startIdle();
   });
 
   bot.on("kicked", (reason) => {
@@ -70,27 +71,54 @@ function createBot() {
   });
 }
 
-// ================= IDLE (NO MOVEMENT SPAM) =================
+// ================= IDLE SYSTEM =================
 
 function startIdle() {
-  setInterval(() => {
+  stopIdle();
+
+  function loop() {
     if (!bot || !bot.entity) return;
 
     try {
-      // 👀 just look around occasionally
-      const yaw = bot.entity.yaw + (Math.random() - 0.5) * 0.5;
+      // 👀 smooth look around
+      const yaw = bot.entity.yaw + (Math.random() - 0.5) * 0.6;
       const pitch = bot.entity.pitch + (Math.random() - 0.5) * 0.3;
       bot.look(yaw, pitch, true);
+
+      // 🦘 random jump (natural)
+      if (Math.random() < 0.3 && bot.entity.onGround) {
+        bot.setControlState("jump", true);
+
+        setTimeout(() => {
+          if (!bot) return;
+          bot.setControlState("jump", false);
+        }, 180);
+      }
 
     } catch (e) {
       console.log("Idle error:", e.message);
     }
-  }, 4000);
+
+    // next action delay (human-like)
+    const next = 3000 + Math.random() * 4000;
+    idleLoop = setTimeout(loop, next);
+  }
+
+  loop();
+}
+
+function stopIdle() {
+  if (idleLoop) {
+    clearTimeout(idleLoop);
+    idleLoop = null;
+  }
 }
 
 // ================= SAFE RECONNECT =================
 
 function safeReconnect() {
+  stopIdle();
+
   if (reconnecting) return;
 
   reconnecting = true;
