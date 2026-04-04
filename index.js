@@ -17,11 +17,9 @@ setInterval(() => {
 let bot = null;
 let reconnecting = false;
 
-let idleLoop = null;
+let lookLoop = null;
 let jumpInterval = null;
 let moveInterval = null;
-
-let jumping = false;
 
 // ================= CREATE BOT =================
 function createBot() {
@@ -30,7 +28,6 @@ function createBot() {
 
   console.log("🚀 Starting bot...");
 
-  // cleanup old bot
   if (bot) {
     try {
       bot.removeAllListeners();
@@ -51,37 +48,26 @@ function createBot() {
     }
   });
 
-  bot.once("login", () => {
-    console.log("🔐 Logged in");
-  });
+  bot.once("login", () => console.log("🔐 Logged in"));
 
   bot.once("spawn", () => {
-    console.log("✅ Bot joined successfully!");
+    console.log("✅ Bot joined!");
     reconnecting = false;
-
     startIdle();
   });
 
-  // physics jump support
-  bot.on("physicsTick", () => {
-    if (!bot || !bot.entity) return;
-    if (jumping) {
-      bot.setControlState("jump", true);
-    }
-  });
-
-  bot.on("kicked", (reason) => {
-    console.log("❌ Kicked:", reason.toString());
+  bot.on("kicked", (r) => {
+    console.log("❌ Kicked:", r.toString());
     safeReconnect();
-  });
-
-  bot.on("error", (err) => {
-    console.log("⚠️ Error:", err.message);
   });
 
   bot.on("end", () => {
     console.log("🔌 Disconnected");
     safeReconnect();
+  });
+
+  bot.on("error", (e) => {
+    console.log("⚠️ Error:", e.message);
   });
 }
 
@@ -89,84 +75,86 @@ function createBot() {
 function startIdle() {
   stopIdle();
 
-  // 👀 LOOK LOOP
-  function lookLoop() {
-    if (!bot || !bot.entity) return;
+  // 👀 LOOK AROUND
+  function look() {
+    if (!bot?.entity) return;
 
     try {
-      const yaw = bot.entity.yaw + (Math.random() - 0.5) * 0.6;
-      const pitch = bot.entity.pitch + (Math.random() - 0.5) * 0.3;
+      const yaw = bot.entity.yaw + (Math.random() - 0.5) * 0.8;
+      const pitch = bot.entity.pitch + (Math.random() - 0.5) * 0.4;
       bot.look(yaw, pitch, true);
-    } catch (e) {
-      console.log("Look error:", e.message);
-    }
+    } catch {}
 
-    const next = 2000 + Math.random() * 2000;
-    idleLoop = setTimeout(lookLoop, next);
+    lookLoop = setTimeout(look, 2000 + Math.random() * 2000);
   }
+  look();
 
-  lookLoop();
-
-  // 🦘 JUMP LOOP (every 4–5 sec)
+  // 🦘 ULTRA RELIABLE JUMP
   if (jumpInterval) clearInterval(jumpInterval);
 
   jumpInterval = setInterval(() => {
-    if (!bot || !bot.entity) return;
-    if (jumping) return;
+    if (!bot?.entity) return;
 
-    jumping = true;
-    bot.setControlState("jump", true);
+    // 🧠 STEP 1: force tiny movement (fixes onGround + anti-cheat)
+    bot.setControlState("forward", true);
 
     setTimeout(() => {
-      jumping = false;
-      if (bot) bot.setControlState("jump", false);
-    }, 400);
+      bot.setControlState("forward", false);
+
+      // 🧠 STEP 2: HARD RESET jump
+      bot.setControlState("jump", false);
+
+      setTimeout(() => {
+        // 🧠 STEP 3: force jump (even if server is strict)
+        bot.setControlState("jump", true);
+
+        setTimeout(() => {
+          bot.setControlState("jump", false);
+        }, 350);
+
+      }, 80);
+
+    }, 120);
+
   }, 4500);
 
-  // 🚶 MICRO MOVEMENT (anti-AFK)
+  // 🚶 MICRO MOVEMENT (anti-AFK bypass)
   if (moveInterval) clearInterval(moveInterval);
 
   moveInterval = setInterval(() => {
-    if (!bot || !bot.entity) return;
+    if (!bot?.entity) return;
 
-    const actions = ["forward", "back", "left", "right"];
-    const action = actions[Math.floor(Math.random() * actions.length)];
+    const moves = ["forward", "back", "left", "right"];
+    const m = moves[Math.floor(Math.random() * moves.length)];
 
-    bot.setControlState(action, true);
+    bot.setControlState(m, true);
 
     setTimeout(() => {
-      if (bot) bot.setControlState(action, false);
-    }, 1000 + Math.random() * 1000);
+      bot.setControlState(m, false);
+    }, 800 + Math.random() * 1200);
 
   }, 5000 + Math.random() * 3000);
 }
 
-// ================= STOP IDLE =================
+// ================= STOP =================
 function stopIdle() {
-  if (idleLoop) {
-    clearTimeout(idleLoop);
-    idleLoop = null;
-  }
+  if (lookLoop) clearTimeout(lookLoop);
+  if (jumpInterval) clearInterval(jumpInterval);
+  if (moveInterval) clearInterval(moveInterval);
 
-  if (jumpInterval) {
-    clearInterval(jumpInterval);
-    jumpInterval = null;
-  }
-
-  if (moveInterval) {
-    clearInterval(moveInterval);
-    moveInterval = null;
-  }
+  lookLoop = null;
+  jumpInterval = null;
+  moveInterval = null;
 }
 
-// ================= SAFE RECONNECT =================
+// ================= RECONNECT =================
 function safeReconnect() {
   stopIdle();
 
   if (reconnecting) return;
 
   reconnecting = true;
-  console.log("🔄 Reconnecting in 10 seconds...");
+  console.log("🔄 Reconnecting in 10 sec...");
 
   setTimeout(() => {
     reconnecting = false;
