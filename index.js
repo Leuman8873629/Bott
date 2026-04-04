@@ -21,6 +21,8 @@ let lookLoop = null;
 let jumpInterval = null;
 let moveInterval = null;
 
+let lastHealth = 20;
+
 // ================= CREATE BOT =================
 function createBot() {
   if (reconnecting) return;
@@ -53,8 +55,21 @@ function createBot() {
   bot.once("spawn", () => {
     console.log("✅ Bot joined!");
     reconnecting = false;
+    lastHealth = bot.health;
 
     startIdle();
+  });
+
+  // 💥 DAMAGE DETECTION
+  bot.on("health", () => {
+    if (!bot?.entity) return;
+
+    if (bot.health < lastHealth) {
+      console.log("💥 Got hit!");
+      reactToHit();
+    }
+
+    lastHealth = bot.health;
   });
 
   bot.on("kicked", (r) => {
@@ -72,11 +87,34 @@ function createBot() {
   });
 }
 
+// ================= HIT REACTION =================
+function reactToHit() {
+  if (!bot?.entity) return;
+
+  const moves = ["forward", "back", "left", "right"];
+  const move = moves[Math.floor(Math.random() * moves.length)];
+
+  // sprint escape
+  bot.setControlState("sprint", true);
+  bot.setControlState(move, true);
+
+  // jump reaction (safe)
+  if (bot.entity.onGround) {
+    bot.setControlState("jump", true);
+    setTimeout(() => bot.setControlState("jump", false), 100);
+  }
+
+  setTimeout(() => {
+    bot.setControlState(move, false);
+    bot.setControlState("sprint", false);
+  }, 1000 + Math.random() * 500);
+}
+
 // ================= IDLE SYSTEM =================
 function startIdle() {
   stopIdle();
 
-  // 👀 LOOK AROUND
+  // 👀 LOOK
   function look() {
     if (!bot?.entity) return;
 
@@ -90,37 +128,28 @@ function startIdle() {
   }
   look();
 
-  // 🦘 PERFECT JUMP (NO FLY)
+  // 🦘 CLEAN JUMP (NO FLY)
   if (jumpInterval) clearInterval(jumpInterval);
 
   jumpInterval = setInterval(() => {
     if (!bot?.entity) return;
-
-    // only jump if properly on ground
     if (!bot.entity.onGround) return;
 
-    // reset first (important)
-    bot.setControlState("jump", false);
+    bot.setControlState("jump", true);
 
     setTimeout(() => {
-      // short tap jump (human-like)
-      bot.setControlState("jump", true);
-
-      setTimeout(() => {
-        bot.setControlState("jump", false);
-      }, 100); // 🔥 short = no fly
-
-    }, Math.random() * 150);
+      bot.setControlState("jump", false);
+    }, 100);
 
   }, 4500 + Math.random() * 1000);
 
-  // 🚶 MICRO MOVEMENT (LIGHT, SAFE)
+  // 🚶 SAFE MOVEMENT
   if (moveInterval) clearInterval(moveInterval);
 
   moveInterval = setInterval(() => {
     if (!bot?.entity) return;
 
-    const moves = ["left", "right"]; // ❗ no forward/back (prevents fly flags)
+    const moves = ["left", "right"];
     const move = moves[Math.floor(Math.random() * moves.length)];
 
     bot.setControlState(move, true);
