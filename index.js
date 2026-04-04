@@ -39,7 +39,7 @@ function createBot() {
   bot = mineflayer.createBot({
     host: "Tomanreturns.aternos.me",
     port: 37089,
-    username: "heheh_botwaa",
+    username: "heheh_botwa",
     version: false,
     plugins: [AutoAuth],
     AutoAuth: {
@@ -53,6 +53,7 @@ function createBot() {
   bot.once("spawn", () => {
     console.log("✅ Bot joined!");
     reconnecting = false;
+
     startIdle();
   });
 
@@ -80,8 +81,8 @@ function startIdle() {
     if (!bot?.entity) return;
 
     try {
-      const yaw = bot.entity.yaw + (Math.random() - 0.5) * 0.8;
-      const pitch = bot.entity.pitch + (Math.random() - 0.5) * 0.4;
+      const yaw = bot.entity.yaw + (Math.random() - 0.5) * 0.6;
+      const pitch = bot.entity.pitch + (Math.random() - 0.5) * 0.3;
       bot.look(yaw, pitch, true);
     } catch {}
 
@@ -89,51 +90,46 @@ function startIdle() {
   }
   look();
 
-  // 🦘 ULTRA RELIABLE JUMP
+  // 🦘 PERFECT JUMP (NO FLY)
   if (jumpInterval) clearInterval(jumpInterval);
 
   jumpInterval = setInterval(() => {
     if (!bot?.entity) return;
 
-    // 🧠 STEP 1: force tiny movement (fixes onGround + anti-cheat)
-    bot.setControlState("forward", true);
+    // only jump if properly on ground
+    if (!bot.entity.onGround) return;
+
+    // reset first (important)
+    bot.setControlState("jump", false);
 
     setTimeout(() => {
-      bot.setControlState("forward", false);
-
-      // 🧠 STEP 2: HARD RESET jump
-      bot.setControlState("jump", false);
+      // short tap jump (human-like)
+      bot.setControlState("jump", true);
 
       setTimeout(() => {
-        // 🧠 STEP 3: force jump (even if server is strict)
-        bot.setControlState("jump", true);
+        bot.setControlState("jump", false);
+      }, 100); // 🔥 short = no fly
 
-        setTimeout(() => {
-          bot.setControlState("jump", false);
-        }, 350);
+    }, Math.random() * 150);
 
-      }, 80);
+  }, 4500 + Math.random() * 1000);
 
-    }, 120);
-
-  }, 4500);
-
-  // 🚶 MICRO MOVEMENT (anti-AFK bypass)
+  // 🚶 MICRO MOVEMENT (LIGHT, SAFE)
   if (moveInterval) clearInterval(moveInterval);
 
   moveInterval = setInterval(() => {
     if (!bot?.entity) return;
 
-    const moves = ["forward", "back", "left", "right"];
-    const m = moves[Math.floor(Math.random() * moves.length)];
+    const moves = ["left", "right"]; // ❗ no forward/back (prevents fly flags)
+    const move = moves[Math.floor(Math.random() * moves.length)];
 
-    bot.setControlState(m, true);
+    bot.setControlState(move, true);
 
     setTimeout(() => {
-      bot.setControlState(m, false);
-    }, 800 + Math.random() * 1200);
+      bot.setControlState(move, false);
+    }, 500 + Math.random() * 500);
 
-  }, 5000 + Math.random() * 3000);
+  }, 6000 + Math.random() * 3000);
 }
 
 // ================= STOP =================
