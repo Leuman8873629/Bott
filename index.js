@@ -2,6 +2,8 @@ const express = require("express");
 const http = require("http");
 const mineflayer = require("mineflayer");
 const AutoAuth = require("mineflayer-auto-auth");
+const { pathfinder } = require("mineflayer-pathfinder");
+const pvp = require("mineflayer-pvp").plugin;
 
 const app = express();
 app.get("/", (_, res) => res.send("Bot running"));
@@ -16,6 +18,7 @@ setInterval(() => {
 
 let bot = null;
 let reconnecting = false;
+let fighting = false;
 
 let lookLoop = null;
 let jumpInterval = null;
@@ -24,7 +27,6 @@ let moveInterval = null;
 // ================= RESET CONTROLS =================
 function resetControls() {
   if (!bot) return;
-
   ["forward","back","left","right","jump","sprint","sneak"]
     .forEach(c => bot.setControlState(c, false));
 }
@@ -55,9 +57,13 @@ function createBot() {
       password: "bot112022",
       logging: true,
       timeout: 5000,
-      repeat: false
+      repeat: true // 🔥 important
     }
   });
+
+  // load plugins
+  bot.loadPlugin(pathfinder);
+  bot.loadPlugin(pvp);
 
   bot.once("login", () => console.log("🔐 Logged in"));
 
@@ -65,16 +71,63 @@ function createBot() {
     console.log("✅ Bot joined!");
     reconnecting = false;
 
-    // 🔐 force login
+    // fallback manual auth
     setTimeout(() => {
+      bot.chat("/register bot112022 bot112022");
       bot.chat("/login bot112022");
     }, 3000);
 
-    // start idle
     setTimeout(() => {
       startIdle();
     }, 6000);
   });
+
+  // ================= AUTO DEFENSE =================
+  bot.on("entityHurt", (entity) => {
+    if (!bot?.entity || fighting) return;
+
+    if (entity === bot.entity) {
+      const attacker = bot.nearestEntity(e =>
+        (e.type === "player" || e.type === "mob") &&
+        e !== bot.entity
+      );
+
+      if (attacker) {
+        console.log("⚔️ Attacked by:", attacker.name || attacker.mobType);
+        startFight(attacker);
+      }
+    }
+  });
+
+  function startFight(enemy) {
+    if (!bot?.entity || fighting) return;
+
+    fighting = true;
+
+    stopIdle();
+    resetControls();
+
+    try {
+      bot.pvp.attack(enemy);
+    } catch (e) {
+      console.log("⚠️ PVP error:", e.message);
+    }
+  }
+
+  function stopFight() {
+    fighting = false;
+
+    try {
+      bot.pvp.stop();
+    } catch {}
+
+    resetControls();
+
+    setTimeout(() => startIdle(), 2000);
+  }
+
+  bot.on("entityDead", () => fighting && stopFight());
+  bot.on("entityGone", () => fighting && stopFight());
 
   bot.on("kicked", (r) => {
     console.log("❌ Kicked:", r.toString());
@@ -94,10 +147,10 @@ function createBot() {
 // ================= IDLE =================
 function startIdle() {
   stopIdle();
-  resetControls(); // 🔥 important
+  resetControls();
 
   function look() {
-    if (!bot?.entity) return;
+    if (!bot?.entity || fighting) return;
 
     try {
       const yaw = bot.entity.yaw + (Math.random() - 0.5) * 0.6;
@@ -109,18 +162,16 @@ function startIdle() {
   }
   look();
 
-  // jump
   jumpInterval = setInterval(() => {
-    if (!bot?.entity) return;
+    if (!bot?.entity || fighting) return;
     if (!bot.entity.onGround) return;
 
     bot.setControlState("jump", true);
     setTimeout(() => bot.setControlState("jump", false), 100);
   }, 5000);
 
-  // move
   moveInterval = setInterval(() => {
-    if (!bot?.entity) return;
+    if (!bot?.entity || fighting) return;
 
     const move = Math.random() > 0.5 ? "left" : "right";
     bot.setControlState(move, true);
