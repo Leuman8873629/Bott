@@ -43,11 +43,15 @@ function createBot() {
     host: "Tomanreturns.aternos.me",
     port: 37089,
     username: "heheh_botwaa",
-    version: "1.21.11",
+
+    version: false,        // ✅ AUTO VERSION (FIXED)
+    auth: "offline",       // ✅ CRACKED SERVER FIX
+
     plugins: [AutoAuth],
     AutoAuth: {
       password: "bot112022",
-      logging: true
+      logging: true,
+      timeout: 5000
     }
   });
 
@@ -57,7 +61,11 @@ function createBot() {
     console.log("✅ Bot joined!");
     reconnecting = false;
     lastHealth = bot.health;
-    startIdle();
+
+    // ⏳ DELAY (fixes instant kick on Aternos)
+    setTimeout(() => {
+      startIdle();
+    }, 3000);
   });
 
   // 💥 DAMAGE DETECTION
@@ -72,8 +80,9 @@ function createBot() {
     lastHealth = bot.health;
   });
 
-  bot.on("kicked", (r) => {
-    console.log("❌ Kicked:", r.toString());
+  // 🔥 FULL KICK REASON
+  bot.on("kicked", (reason) => {
+    console.log("❌ FULL KICK:", reason);
     safeReconnect();
   });
 
@@ -89,37 +98,28 @@ function createBot() {
 
 // ================= HIT REACTION =================
 function reactToHit() {
-  if (!bot?.entity) return;
-  if (reacting) return;
+  if (!bot?.entity || reacting) return;
 
   reacting = true;
+  stopIdle();
 
   const moves = ["forward", "back", "left", "right"];
   const move = moves[Math.floor(Math.random() * moves.length)];
 
-  // 🛑 STOP idle to prevent override
-  stopIdle();
-
-  // 🏃 sprint escape
   bot.setControlState("sprint", true);
   bot.setControlState(move, true);
 
-  // 🦘 jump safely
   if (bot.entity.onGround) {
     bot.setControlState("jump", true);
     setTimeout(() => bot.setControlState("jump", false), 120);
   }
 
-  // 🔁 stop reaction after time
   setTimeout(() => {
     bot.setControlState(move, false);
     bot.setControlState("sprint", false);
 
     reacting = false;
-
-    // ✅ restart idle AFTER reaction
     startIdle();
-
   }, 1200 + Math.random() * 500);
 }
 
@@ -127,7 +127,6 @@ function reactToHit() {
 function startIdle() {
   stopIdle();
 
-  // 👀 LOOK LOOP
   function look() {
     if (!bot?.entity || reacting) return;
 
@@ -141,20 +140,15 @@ function startIdle() {
   }
   look();
 
-  // 🦘 JUMP LOOP
   jumpInterval = setInterval(() => {
     if (!bot?.entity || reacting) return;
     if (!bot.entity.onGround) return;
 
     bot.setControlState("jump", true);
-
-    setTimeout(() => {
-      bot.setControlState("jump", false);
-    }, 100);
+    setTimeout(() => bot.setControlState("jump", false), 100);
 
   }, 4500 + Math.random() * 1000);
 
-  // 🚶 MOVE LOOP
   moveInterval = setInterval(() => {
     if (!bot?.entity || reacting) return;
 
