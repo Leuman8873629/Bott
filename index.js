@@ -23,12 +23,32 @@ let fighting = false;
 let lookLoop = null;
 let jumpInterval = null;
 let moveInterval = null;
+let physicsLoop = null;
 
 // ================= RESET CONTROLS =================
 function resetControls() {
   if (!bot) return;
   ["forward","back","left","right","jump","sprint","sneak"]
     .forEach(c => bot.setControlState(c, false));
+}
+
+// ================= PHYSICS FIX =================
+function startPhysics() {
+  stopPhysics();
+
+  physicsLoop = setInterval(() => {
+    if (!bot?.entity) return;
+
+    // tiny pulse movement to prevent freeze
+    bot.setControlState("forward", true);
+    setTimeout(() => bot.setControlState("forward", false), 80);
+
+  }, 1200);
+}
+
+function stopPhysics() {
+  if (physicsLoop) clearInterval(physicsLoop);
+  physicsLoop = null;
 }
 
 // ================= CREATE BOT =================
@@ -57,11 +77,10 @@ function createBot() {
       password: "bot112022",
       logging: true,
       timeout: 5000,
-      repeat: true // 🔥 important
+      repeat: true
     }
   });
 
-  // load plugins
   bot.loadPlugin(pathfinder);
   bot.loadPlugin(pvp);
 
@@ -71,7 +90,6 @@ function createBot() {
     console.log("✅ Bot joined!");
     reconnecting = false;
 
-    // fallback manual auth
     setTimeout(() => {
       bot.chat("/register bot112022 bot112022");
       bot.chat("/login bot112022");
@@ -106,6 +124,7 @@ function createBot() {
 
     stopIdle();
     resetControls();
+    startPhysics(); // 🔥 anti-freeze
 
     try {
       bot.pvp.attack(enemy);
@@ -121,6 +140,7 @@ function createBot() {
       bot.pvp.stop();
     } catch {}
 
+    stopPhysics(); // 🔥 stop fix loop
     resetControls();
 
     setTimeout(() => startIdle(), 2000);
@@ -128,6 +148,16 @@ function createBot() {
 
   bot.on("entityDead", () => fighting && stopFight());
   bot.on("entityGone", () => fighting && stopFight());
+
+  // ================= ANTI FLOAT FIX =================
+  bot.on("physicsTick", () => {
+    if (!bot?.entity) return;
+
+    // if stuck mid-air, force update
+    if (!bot.entity.onGround && fighting) {
+      bot.setControlState("jump", false);
+    }
+  });
 
   bot.on("kicked", (r) => {
     console.log("❌ Kicked:", r.toString());
@@ -196,6 +226,7 @@ function stopIdle() {
 // ================= RECONNECT =================
 function safeReconnect() {
   stopIdle();
+  stopPhysics();
   resetControls();
 
   if (reconnecting) return;
