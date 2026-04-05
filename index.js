@@ -1,7 +1,6 @@
 const express = require("express");
 const http = require("http");
 const mineflayer = require("mineflayer");
-const AutoAuth = require("mineflayer-auto-auth");
 
 const app = express();
 app.get("/", (_, res) => res.send("Bot running"));
@@ -27,8 +26,8 @@ let reacting = false;
 // ================= RESET CONTROLS =================
 function resetControls() {
   if (!bot) return;
-  const controls = ["forward", "back", "left", "right", "jump", "sprint"];
-  controls.forEach(c => bot.setControlState(c, false));
+  ["forward", "back", "left", "right", "jump", "sprint"]
+    .forEach(c => bot.setControlState(c, false));
 }
 
 // ================= CREATE BOT =================
@@ -50,12 +49,7 @@ function createBot() {
     host: "TSLifestealsmp.aternos.me",
     port: 27900,
     username: "heheh_botwaa",
-    version: false,
-    plugins: [AutoAuth],
-    AutoAuth: {
-      password: "bot112022",
-      logging: true
-    }
+    version: false
   });
 
   bot.once("login", () => console.log("🔐 Logged in"));
@@ -64,10 +58,12 @@ function createBot() {
     console.log("✅ Bot joined!");
     reconnecting = false;
     lastHealth = bot.health;
+
+    setupAdvancedLogin(); // 🔥 login system
     startIdle();
   });
 
-  // 💥 DAMAGE DETECTION (SAFE)
+  // 💥 DAMAGE DETECT
   bot.on("health", () => {
     if (!bot?.entity) return;
 
@@ -93,13 +89,52 @@ function createBot() {
   });
 }
 
+// ================= ADVANCED LOGIN =================
+function setupAdvancedLogin() {
+  const password = "bot112022";
+
+  let loggedIn = false;
+  let triedRegister = false;
+
+  bot.on("message", (msg) => {
+    const text = msg.toString().toLowerCase();
+
+    if (text.includes("/register")) {
+      if (triedRegister) return;
+      console.log("📝 Registering...");
+      bot.chat(`/register ${password} ${password}`);
+      triedRegister = true;
+    }
+
+    if (text.includes("/login")) {
+      console.log("🔐 Logging in...");
+      bot.chat(`/login ${password}`);
+    }
+
+    if (
+      text.includes("logged in") ||
+      text.includes("welcome") ||
+      text.includes("success")
+    ) {
+      console.log("✅ Login success");
+      loggedIn = true;
+    }
+  });
+
+  // fallback login
+  setTimeout(() => {
+    if (!loggedIn) {
+      console.log("⏳ Forced login...");
+      bot.chat(`/login ${password}`);
+    }
+  }, 4000);
+}
+
 // ================= HIT REACTION =================
 function reactToHit() {
   if (!bot?.entity) return;
 
   reacting = true;
-
-  // 🛑 stop idle completely
   stopIdle();
 
   const moves = ["forward", "back", "left", "right"];
@@ -110,7 +145,6 @@ function reactToHit() {
   bot.setControlState("sprint", true);
   bot.setControlState(move, true);
 
-  // safe jump
   if (bot.entity.onGround) {
     bot.setControlState("jump", true);
     setTimeout(() => bot.setControlState("jump", false), 120);
@@ -118,12 +152,8 @@ function reactToHit() {
 
   setTimeout(() => {
     resetControls();
-
     reacting = false;
-
-    // 🔄 restart idle safely
     setTimeout(startIdle, 300);
-
   }, 1200 + Math.random() * 500);
 }
 
@@ -133,7 +163,6 @@ function startIdle() {
 
   stopIdle();
 
-  // 👀 LOOK LOOP
   function look() {
     if (!bot?.entity || reacting) return;
 
@@ -147,7 +176,6 @@ function startIdle() {
   }
   look();
 
-  // 🦘 JUMP LOOP
   jumpInterval = setInterval(() => {
     if (!bot?.entity || reacting) return;
     if (!bot.entity.onGround) return;
@@ -157,7 +185,6 @@ function startIdle() {
 
   }, 4000 + Math.random() * 1500);
 
-  // 🚶 MOVE LOOP
   moveInterval = setInterval(() => {
     if (!bot?.entity || reacting) return;
 
