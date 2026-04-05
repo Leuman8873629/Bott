@@ -21,8 +21,6 @@ let alertMode = false;
 
 let lookLoop = null;
 let jumpLoop = null;
-let moveLoop = null;
-let antiFreezeLoop = null;
 
 // ================= RESET =================
 function resetControls() {
@@ -79,7 +77,7 @@ function createBot() {
     }, 6000);
   });
 
-  // 💥 HIT DETECTION (NO FREEZE FIX)
+  // 💥 HIT FIX (NO FREEZE, NO MOVEMENT SPAM)
   bot.on("entityHurt", (entity) => {
     if (!bot?.entity) return;
 
@@ -87,16 +85,11 @@ function createBot() {
       console.log("💥 Got hit → ALERT MODE");
       alertMode = true;
 
-      // 🔥 FORCE MOVEMENT (fix freeze)
-      resetControls();
-
-      bot.setControlState("forward", true);
+      // 🔥 ONLY JUMP (no forward movement)
       bot.setControlState("jump", true);
-
       setTimeout(() => {
-        bot.setControlState("forward", false);
         bot.setControlState("jump", false);
-      }, 200);
+      }, 150);
     }
   });
 
@@ -122,8 +115,6 @@ function startSystems() {
 
   startLook();
   startJump();
-  startMove();
-  startAntiFreeze();
 }
 
 // ================= LOOK =================
@@ -142,7 +133,7 @@ function startLook() {
   loop();
 }
 
-// ================= JUMP (SMART LOOP) =================
+// ================= JUMP =================
 function startJump() {
   function loop() {
     if (!bot?.entity || !bot.entity.position) return;
@@ -161,48 +152,13 @@ function startJump() {
   loop();
 }
 
-// ================= MOVE =================
-function startMove() {
-  moveLoop = setInterval(() => {
-    if (!bot?.entity) return;
-
-    const move = Math.random() > 0.5 ? "left" : "right";
-
-    bot.setControlState(move, true);
-
-    setTimeout(() => {
-      bot.setControlState(move, false);
-    }, 500);
-  }, 7000);
-}
-
-// ================= ANTI FREEZE =================
-function startAntiFreeze() {
-  if (antiFreezeLoop) return;
-
-  antiFreezeLoop = setInterval(() => {
-    if (!bot?.entity) return;
-
-    // tiny pulse keeps physics alive
-    bot.setControlState("forward", true);
-
-    setTimeout(() => {
-      bot.setControlState("forward", false);
-    }, 50);
-  }, 1000);
-}
-
 // ================= STOP =================
 function stopSystems() {
   if (lookLoop) clearTimeout(lookLoop);
   if (jumpLoop) clearTimeout(jumpLoop);
-  if (moveLoop) clearInterval(moveLoop);
-  if (antiFreezeLoop) clearInterval(antiFreezeLoop);
 
   lookLoop = null;
   jumpLoop = null;
-  moveLoop = null;
-  antiFreezeLoop = null;
 }
 
 // ================= RECONNECT =================
