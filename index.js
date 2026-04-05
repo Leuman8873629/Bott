@@ -21,16 +21,17 @@ let alertMode = false;
 
 let lookLoop = null;
 let jumpLoop = null;
-let moveInterval = null;
+let moveLoop = null;
+let antiFreezeLoop = null;
 
-// ================= RESET CONTROLS =================
+// ================= RESET =================
 function resetControls() {
   if (!bot) return;
   ["forward","back","left","right","jump","sprint","sneak"]
     .forEach(c => bot.setControlState(c, false));
 }
 
-// ================= CREATE BOT =================
+// ================= CREATE =================
 function createBot() {
   if (reconnecting) return;
   reconnecting = true;
@@ -74,17 +75,28 @@ function createBot() {
     }, 3000);
 
     setTimeout(() => {
-      startIdle();
+      startSystems();
     }, 6000);
   });
 
-  // ================= HIT → ALERT MODE =================
+  // 💥 HIT DETECTION (NO FREEZE FIX)
   bot.on("entityHurt", (entity) => {
     if (!bot?.entity) return;
 
     if (entity === bot.entity) {
-      console.log("💥 Got hit! Alert mode ON");
+      console.log("💥 Got hit → ALERT MODE");
       alertMode = true;
+
+      // 🔥 FORCE MOVEMENT (fix freeze)
+      resetControls();
+
+      bot.setControlState("forward", true);
+      bot.setControlState("jump", true);
+
+      setTimeout(() => {
+        bot.setControlState("forward", false);
+        bot.setControlState("jump", false);
+      }, 200);
     }
   });
 
@@ -103,13 +115,20 @@ function createBot() {
   });
 }
 
-// ================= IDLE =================
-function startIdle() {
-  stopIdle();
+// ================= SYSTEM START =================
+function startSystems() {
+  stopSystems();
   resetControls();
 
-  // 👀 LOOK SYSTEM
-  function look() {
+  startLook();
+  startJump();
+  startMove();
+  startAntiFreeze();
+}
+
+// ================= LOOK =================
+function startLook() {
+  function loop() {
     if (!bot?.entity) return;
 
     try {
@@ -118,35 +137,37 @@ function startIdle() {
       bot.look(yaw, pitch, true);
     } catch {}
 
-    lookLoop = setTimeout(look, 2000 + Math.random() * 2000);
+    lookLoop = setTimeout(loop, 2000 + Math.random() * 2000);
   }
-  look();
+  loop();
+}
 
-  // 🦘 SMART JUMP LOOP (MAIN FIX)
-  function jumpLoopFunc() {
-    if (!bot?.entity) return;
+// ================= JUMP (SMART LOOP) =================
+function startJump() {
+  function loop() {
+    if (!bot?.entity || !bot.entity.position) return;
 
     if (bot.entity.onGround) {
       bot.setControlState("jump", true);
-      setTimeout(() => bot.setControlState("jump", false), 100);
+      setTimeout(() => bot.setControlState("jump", false), 120);
     }
 
-    // 🔥 dynamic delay
-    let nextDelay = 5000; // normal
+    const delay = alertMode
+      ? 2000 + Math.random() * 1000   // 🔥 2–3 sec after hit
+      : 5000;
 
-    if (alertMode) {
-      nextDelay = 2000 + Math.random() * 1000; // 2–3 sec
-    }
-
-    jumpLoop = setTimeout(jumpLoopFunc, nextDelay);
+    jumpLoop = setTimeout(loop, delay);
   }
-  jumpLoopFunc();
+  loop();
+}
 
-  // 🏃 RANDOM MOVEMENT
-  moveInterval = setInterval(() => {
+// ================= MOVE =================
+function startMove() {
+  moveLoop = setInterval(() => {
     if (!bot?.entity) return;
 
     const move = Math.random() > 0.5 ? "left" : "right";
+
     bot.setControlState(move, true);
 
     setTimeout(() => {
@@ -155,20 +176,38 @@ function startIdle() {
   }, 7000);
 }
 
+// ================= ANTI FREEZE =================
+function startAntiFreeze() {
+  if (antiFreezeLoop) return;
+
+  antiFreezeLoop = setInterval(() => {
+    if (!bot?.entity) return;
+
+    // tiny pulse keeps physics alive
+    bot.setControlState("forward", true);
+
+    setTimeout(() => {
+      bot.setControlState("forward", false);
+    }, 50);
+  }, 1000);
+}
+
 // ================= STOP =================
-function stopIdle() {
+function stopSystems() {
   if (lookLoop) clearTimeout(lookLoop);
   if (jumpLoop) clearTimeout(jumpLoop);
-  if (moveInterval) clearInterval(moveInterval);
+  if (moveLoop) clearInterval(moveLoop);
+  if (antiFreezeLoop) clearInterval(antiFreezeLoop);
 
   lookLoop = null;
   jumpLoop = null;
-  moveInterval = null;
+  moveLoop = null;
+  antiFreezeLoop = null;
 }
 
 // ================= RECONNECT =================
 function safeReconnect() {
-  stopIdle();
+  stopSystems();
   resetControls();
 
   if (reconnecting) return;
