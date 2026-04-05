@@ -43,7 +43,7 @@ function createBot() {
     host: "Tomanreturns.aternos.me",
     port: 37089,
     username: "heheh_botwaa",
-    version: 1.21.11,
+    version: 1.21.8,
     plugins: [AutoAuth],
     AutoAuth: {
       password: "bot112022",
