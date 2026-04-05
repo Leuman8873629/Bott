@@ -7,7 +7,7 @@ const app = express();
 app.get("/", (_, res) => res.send("Bot running"));
 app.listen(process.env.PORT || 3000);
 
-// keep alive
+// Keep alive
 setInterval(() => {
   if (process.env.PROJECT_DOMAIN) {
     http.get(`http://${process.env.PROJECT_DOMAIN}.repl.co/`);
@@ -17,19 +17,70 @@ setInterval(() => {
 let bot = null;
 let reconnecting = false;
 let jumpLoop = null;
+let lastJump = 0;
 
 // ================= RESET =================
 function resetControls() {
   if (!bot) return;
-  ["forward","back","left","right","jump","sprint","sneak"]
-    .forEach(c => bot.setControlState(c, false));
+  try {
+    ["forward", "back", "left", "right", "jump", "sprint", "sneak"]
+      .forEach(c => bot.setControlState(c, false));
+  } catch {}
 }
 
-// ================= CREATE =================
+// ================= JUMP LOOP =================
+function startJump() {
+  if (jumpLoop) clearTimeout(jumpLoop);
+  lastJump = 0;
+
+  function loop() {
+    try {
+      if (!bot?.entity) {
+        jumpLoop = setTimeout(loop, 1000);
+        return;
+      }
+
+      const now = Date.now();
+      const timeSinceLast = now - lastJump;
+
+      // Jump if on ground OR if stuck airborne (knockback/hit recovery)
+      if (bot.entity.onGround || timeSinceLast > 3000) {
+        bot.setControlState("jump", true);
+        setTimeout(() => {
+          if (bot) bot.setControlState("jump", false);
+        }, 120);
+        lastJump = now;
+      }
+    } catch (e) {
+      console.log("⚠️ Jump loop error:", e.message);
+    }
+
+    jumpLoop = setTimeout(loop, 2000 + Math.random() * 1000);
+  }
+
+  loop();
+}
+
+// ================= RECONNECT =================
+function safeReconnect() {
+  if (jumpLoop) {
+    clearTimeout(jumpLoop);
+    jumpLoop = null;
+  }
+  resetControls();
+  if (reconnecting) return;
+  reconnecting = true;
+  console.log("🔄 Reconnecting in 10 sec...");
+  setTimeout(() => {
+    reconnecting = false;
+    createBot();
+  }, 10000);
+}
+
+// ================= CREATE BOT =================
 function createBot() {
   if (reconnecting) return;
   reconnecting = true;
-
   console.log("🚀 Starting bot...");
 
   if (bot) {
@@ -45,7 +96,6 @@ function createBot() {
     port: 27900,
     username: "heheh_botwaa",
     version: false,
-
     plugins: [AutoAuth],
     AutoAuth: {
       password: "bot112022",
@@ -62,17 +112,26 @@ function createBot() {
     reconnecting = false;
 
     setTimeout(() => {
+      if (!bot) return;
       bot.chat("/register bot112022 bot112022");
       bot.chat("/login bot112022");
     }, 3000);
 
     setTimeout(() => {
+      if (!bot) return;
       startJump();
     }, 6000);
   });
 
+  // Resume jump loop after being hurt (knockback recovery)
+  bot.on("entityHurt", (entity) => {
+    if (entity !== bot.entity) return;
+    console.log("💥 Bot was hit! Resetting jump timer...");
+    lastJump = 0; // force jump attempt on next loop tick
+  });
+
   bot.on("kicked", (r) => {
-    console.log("❌ Kicked:", r.toString());
+    console.log("❌ Kicked:", typeof r === "object" ? JSON.stringify(r) : r);
     safeReconnect();
   });
 
@@ -84,46 +143,6 @@ function createBot() {
   bot.on("error", (e) => {
     console.log("⚠️ Error:", e.message);
   });
-}
-
-// ================= JUMP ONLY =================
-function startJump() {
-  if (jumpLoop) clearTimeout(jumpLoop);
-
-  function loop() {
-    if (!bot?.entity || !bot.entity.onGround) {
-      jumpLoop = setTimeout(loop, 1000);
-      return;
-    }
-
-    // jump
-    bot.setControlState("jump", true);
-
-    setTimeout(() => {
-      bot.setControlState("jump", false);
-    }, 120);
-
-    // repeat every 2–3 sec
-    jumpLoop = setTimeout(loop, 2000 + Math.random() * 1000);
-  }
-
-  loop();
-}
-
-// ================= RECONNECT =================
-function safeReconnect() {
-  if (jumpLoop) clearTimeout(jumpLoop);
-  resetControls();
-
-  if (reconnecting) return;
-
-  reconnecting = true;
-  console.log("🔄 Reconnecting in 10 sec...");
-
-  setTimeout(() => {
-    reconnecting = false;
-    createBot();
-  }, 10000);
 }
 
 // ================= START =================
