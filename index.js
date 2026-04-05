@@ -16,8 +16,14 @@ setInterval(() => {
   }
 }, 240000);
 
-// ================= BOT =================
+let currentBot = null;
+
 function createBot() {
+  // Prevent multiple bots
+  if (currentBot) {
+    try { currentBot.quit(); } catch {}
+  }
+
   const bot = mineflayer.createBot({
     host: "TSLifestealsmp.aternos.me",
     port: 27900,
@@ -25,24 +31,23 @@ function createBot() {
     version: false
   });
 
+  currentBot = bot;
+
+  // Plugins
   bot.loadPlugin(pvp);
   bot.loadPlugin(armorManager);
   bot.loadPlugin(pathfinder);
 
   const OWNER = "SPARKXBOII"; // 🔥 CHANGE THIS
-
   let guardPos = null;
-  let reconnectDelay = 5000;
 
   // ================= SMART LOGIN =================
   bot.on("messagestr", (msg) => {
     const m = msg.toLowerCase();
-
     if (m.includes("/register")) {
       bot.chat("/register bot112022 bot112022");
       console.log("Registering...");
     }
-
     if (m.includes("/login")) {
       bot.chat("/login bot112022");
       console.log("Logging in...");
@@ -52,13 +57,10 @@ function createBot() {
   // ================= HUMAN JUMP =================
   function humanJump() {
     const delay = Math.random() * 5000 + 3000;
-
     setTimeout(() => {
       if (!bot.entity) return;
-
       bot.setControlState("jump", true);
       setTimeout(() => bot.setControlState("jump", false), 200);
-
       humanJump();
     }, delay);
   }
@@ -83,13 +85,12 @@ function createBot() {
     }, 300);
   });
 
-  // ================= MOVEMENT WHEN HIT =================
+  // ================= MOVE ON HIT =================
   bot.on("entityHurt", (entity) => {
     if (entity !== bot.entity) return;
 
     bot.setControlState("forward", true);
     bot.setControlState("sprint", true);
-
     setTimeout(() => {
       bot.setControlState("forward", false);
       bot.setControlState("sprint", false);
@@ -113,7 +114,6 @@ function createBot() {
 
     const mcData = require("minecraft-data")(bot.version);
     bot.pathfinder.setMovements(new Movements(bot, mcData));
-
     bot.pathfinder.setGoal(
       new goals.GoalBlock(guardPos.x, guardPos.y, guardPos.z)
     );
@@ -146,7 +146,6 @@ function createBot() {
     if (target) {
       bot.pvp.attack(target);
 
-      // 🔥 strafing (fix hitbox feeling)
       if (Math.random() < 0.3) {
         bot.setControlState("left", true);
         setTimeout(() => bot.setControlState("left", false), 300);
@@ -159,13 +158,11 @@ function createBot() {
     }
   });
 
-  // ================= CHAT COMMAND FIX =================
+  // ================= CHAT COMMANDS =================
   bot.on("messagestr", (msg) => {
     if (!msg.includes("<")) return;
-
     const username = msg.split(">")[0].replace("<", "").trim();
     const message = msg.split(">")[1]?.trim().toLowerCase();
-
     if (username !== OWNER) return;
 
     if (message === "guard") {
@@ -183,9 +180,16 @@ function createBot() {
   });
 
   // ================= SMART RECONNECT =================
-  bot.on("end", () => {
-    console.log(`Reconnecting in ${reconnectDelay / 1000}s...`);
+  let isReconnecting = false;
+  let reconnectDelay = 5000;
 
+  bot.on("end", (reason) => {
+    console.log("Disconnected:", reason);
+
+    if (isReconnecting) return;
+    isReconnecting = true;
+
+    console.log(`Reconnecting in ${reconnectDelay / 1000}s...`);
     setTimeout(() => {
       reconnectDelay = Math.min(reconnectDelay + 5000, 30000);
       createBot();
@@ -194,10 +198,11 @@ function createBot() {
 
   bot.on("spawn", () => {
     reconnectDelay = 5000;
+    isReconnecting = false;
   });
 
   bot.on("kicked", console.log);
-  bot.on("error", console.log);
+  bot.on("error", (err) => console.log("Error:", err.message));
 }
 
 createBot();
