@@ -29,7 +29,7 @@ function createBot() {
   bot.loadPlugin(armorManager);
   bot.loadPlugin(pathfinder);
 
-  const OWNER = "YourMinecraftName"; // 🔥 CHANGE THIS
+  const OWNER = "SPARKXBOII"; // 🔥 CHANGE THIS
 
   let guardPos = null;
   let reconnectDelay = 5000;
