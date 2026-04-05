@@ -3,7 +3,6 @@ const http = require("http");
 const mineflayer = require("mineflayer");
 const AutoAuth = require("mineflayer-auto-auth");
 const { pathfinder } = require("mineflayer-pathfinder");
-const pvp = require("mineflayer-pvp").plugin;
 
 const app = express();
 app.get("/", (_, res) => res.send("Bot running"));
@@ -18,37 +17,17 @@ setInterval(() => {
 
 let bot = null;
 let reconnecting = false;
-let fighting = false;
+let alertMode = false;
 
 let lookLoop = null;
-let jumpInterval = null;
+let jumpLoop = null;
 let moveInterval = null;
-let physicsLoop = null;
 
 // ================= RESET CONTROLS =================
 function resetControls() {
   if (!bot) return;
   ["forward","back","left","right","jump","sprint","sneak"]
     .forEach(c => bot.setControlState(c, false));
-}
-
-// ================= PHYSICS FIX =================
-function startPhysics() {
-  stopPhysics();
-
-  physicsLoop = setInterval(() => {
-    if (!bot?.entity) return;
-
-    // tiny pulse movement to prevent freeze
-    bot.setControlState("forward", true);
-    setTimeout(() => bot.setControlState("forward", false), 80);
-
-  }, 1200);
-}
-
-function stopPhysics() {
-  if (physicsLoop) clearInterval(physicsLoop);
-  physicsLoop = null;
 }
 
 // ================= CREATE BOT =================
@@ -82,7 +61,6 @@ function createBot() {
   });
 
   bot.loadPlugin(pathfinder);
-  bot.loadPlugin(pvp);
 
   bot.once("login", () => console.log("🔐 Logged in"));
 
@@ -100,62 +78,13 @@ function createBot() {
     }, 6000);
   });
 
-  // ================= AUTO DEFENSE =================
+  // ================= HIT → ALERT MODE =================
   bot.on("entityHurt", (entity) => {
-    if (!bot?.entity || fighting) return;
-
-    if (entity === bot.entity) {
-      const attacker = bot.nearestEntity(e =>
-        (e.type === "player" || e.type === "mob") &&
-        e !== bot.entity
-      );
-
-      if (attacker) {
-        console.log("⚔️ Attacked by:", attacker.name || attacker.mobType);
-        startFight(attacker);
-      }
-    }
-  });
-
-  function startFight(enemy) {
-    if (!bot?.entity || fighting) return;
-
-    fighting = true;
-
-    stopIdle();
-    resetControls();
-    startPhysics(); // 🔥 anti-freeze
-
-    try {
-      bot.pvp.attack(enemy);
-    } catch (e) {
-      console.log("⚠️ PVP error:", e.message);
-    }
-  }
-
-  function stopFight() {
-    fighting = false;
-
-    try {
-      bot.pvp.stop();
-    } catch {}
-
-    stopPhysics(); // 🔥 stop fix loop
-    resetControls();
-
-    setTimeout(() => startIdle(), 2000);
-  }
-
-  bot.on("entityDead", () => fighting && stopFight());
-  bot.on("entityGone", () => fighting && stopFight());
-
-  // ================= ANTI FLOAT FIX =================
-  bot.on("physicsTick", () => {
     if (!bot?.entity) return;
 
-    // if stuck mid-air, force update
-    if (!bot.entity.onGround && fighting) {
-      bot.setControlState("jump", false);
+    if (entity === bot.entity) {
+      console.log("💥 Got hit! Alert mode ON");
+      alertMode = true;
     }
   });
 
@@ -179,8 +108,9 @@ function startIdle() {
   stopIdle();
   resetControls();
 
+  // 👀 LOOK SYSTEM
   function look() {
-    if (!bot?.entity || fighting) return;
+    if (!bot?.entity) return;
 
     try {
       const yaw = bot.entity.yaw + (Math.random() - 0.5) * 0.6;
@@ -192,16 +122,29 @@ function startIdle() {
   }
   look();
 
-  jumpInterval = setInterval(() => {
-    if (!bot?.entity || fighting) return;
-    if (!bot.entity.onGround) return;
+  // 🦘 SMART JUMP LOOP (MAIN FIX)
+  function jumpLoopFunc() {
+    if (!bot?.entity) return;
 
-    bot.setControlState("jump", true);
-    setTimeout(() => bot.setControlState("jump", false), 100);
-  }, 5000);
+    if (bot.entity.onGround) {
+      bot.setControlState("jump", true);
+      setTimeout(() => bot.setControlState("jump", false), 100);
+    }
 
+    // 🔥 dynamic delay
+    let nextDelay = 5000; // normal
+
+    if (alertMode) {
+      nextDelay = 2000 + Math.random() * 1000; // 2–3 sec
+    }
+
+    jumpLoop = setTimeout(jumpLoopFunc, nextDelay);
+  }
+  jumpLoopFunc();
+
+  // 🏃 RANDOM MOVEMENT
   moveInterval = setInterval(() => {
-    if (!bot?.entity || fighting) return;
+    if (!bot?.entity) return;
 
     const move = Math.random() > 0.5 ? "left" : "right";
     bot.setControlState(move, true);
@@ -215,18 +158,17 @@ function startIdle() {
 // ================= STOP =================
 function stopIdle() {
   if (lookLoop) clearTimeout(lookLoop);
-  if (jumpInterval) clearInterval(jumpInterval);
+  if (jumpLoop) clearTimeout(jumpLoop);
   if (moveInterval) clearInterval(moveInterval);
 
   lookLoop = null;
-  jumpInterval = null;
+  jumpLoop = null;
   moveInterval = null;
 }
 
 // ================= RECONNECT =================
 function safeReconnect() {
   stopIdle();
-  stopPhysics();
   resetControls();
 
   if (reconnecting) return;
