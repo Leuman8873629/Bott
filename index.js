@@ -24,6 +24,18 @@ let moveInterval = null;
 let lastHealth = 20;
 let reacting = false;
 
+// ================= CONTROL RESET =================
+function resetControls() {
+  if (!bot) return;
+
+  const controls = [
+    "forward", "back", "left", "right",
+    "jump", "sprint", "sneak"
+  ];
+
+  controls.forEach(c => bot.setControlState(c, false));
+}
+
 // ================= CREATE BOT =================
 function createBot() {
   if (reconnecting) return;
@@ -50,7 +62,7 @@ function createBot() {
       password: "bot112022",
       logging: true,
       timeout: 5000,
-      repeat: false // ✅ stop spam
+      repeat: false // stop spam
     }
   });
 
@@ -61,12 +73,12 @@ function createBot() {
     reconnecting = false;
     lastHealth = bot.health;
 
-    // 🔐 force login once (fix auth bugs)
+    // 🔐 force login once
     setTimeout(() => {
       bot.chat("/login bot112022");
     }, 3000);
 
-    // start idle after auth
+    // start idle safely
     setTimeout(() => {
       startIdle();
     }, 6000);
@@ -76,7 +88,7 @@ function createBot() {
   bot.on("health", () => {
     if (!bot?.entity) return;
 
-    if (bot.health < lastHealth) {
+    if (bot.health < lastHealth && !reacting) {
       console.log("💥 Got hit!");
       reactToHit();
     }
@@ -105,7 +117,9 @@ function reactToHit() {
   if (!bot?.entity || reacting) return;
 
   reacting = true;
-  stopIdle(); // 🔥 stop idle
+
+  stopIdle();
+  resetControls();
 
   const moves = ["forward", "back", "left", "right"];
   const move = moves[Math.floor(Math.random() * moves.length)];
@@ -119,17 +133,21 @@ function reactToHit() {
   }
 
   setTimeout(() => {
-    bot.setControlState(move, false);
-    bot.setControlState("sprint", false);
+    resetControls();
 
     reacting = false;
-    startIdle(); // ✅ resume idle
+
+    setTimeout(() => {
+      startIdle();
+    }, 200);
+
   }, 1200 + Math.random() * 500);
 }
 
 // ================= IDLE =================
 function startIdle() {
   stopIdle();
+  resetControls();
 
   function look() {
     if (!bot?.entity || reacting) return;
@@ -176,6 +194,7 @@ function stopIdle() {
 // ================= RECONNECT =================
 function safeReconnect() {
   stopIdle();
+  resetControls();
 
   if (reconnecting) return;
 
