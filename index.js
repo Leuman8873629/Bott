@@ -44,8 +44,8 @@ function createBot() {
     port: 27900,
     username: "heheh_botwaa",
 
-    version: false,        // ✅ AUTO VERSION (FIXED)
-    auth: "offline",       // ✅ CRACKED SERVER FIX
+    version: false,        // ✅ AUTO VERSION
+    auth: "offline",       // ✅ CRACKED SUPPORT
 
     plugins: [AutoAuth],
     AutoAuth: {
@@ -62,10 +62,25 @@ function createBot() {
     reconnecting = false;
     lastHealth = bot.health;
 
-    // ⏳ DELAY (fixes instant kick on Aternos)
+    // ⏳ wait for login/register before moving
     setTimeout(() => {
       startIdle();
-    }, 3000);
+    }, 6000);
+  });
+
+  // ================= SMART AUTH =================
+  bot.on("messagestr", (msg) => {
+    const message = msg.toLowerCase();
+
+    if (message.includes("register")) {
+      console.log("📝 Registering...");
+      bot.chat(`/register bot112022 bot112022`);
+    }
+
+    if (message.includes("login")) {
+      console.log("🔐 Logging in...");
+      bot.chat(`/login bot112022`);
+    }
   });
 
   // 💥 DAMAGE DETECTION
