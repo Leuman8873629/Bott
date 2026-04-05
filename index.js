@@ -124,7 +124,7 @@ function createBot() {
   });
 
   // ATTACK MOBS
-  bot.on("physicTick", () => {
+  bot.on("physicsTick", () => {
     if (!guardPos) return;
 
     const entity = bot.nearestEntity(e =>
