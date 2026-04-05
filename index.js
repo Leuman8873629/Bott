@@ -22,6 +22,7 @@ let jumpInterval = null;
 let moveInterval = null;
 
 let lastHealth = 20;
+let reacting = false;
 
 // ================= CREATE BOT =================
 function createBot() {
@@ -43,10 +44,13 @@ function createBot() {
     port: 27900,
     username: "heheh_botwaa",
     version: false,
+
     plugins: [AutoAuth],
     AutoAuth: {
       password: "bot112022",
-      logging: true
+      logging: true,
+      timeout: 5000,
+      repeat: false // ✅ stop spam
     }
   });
 
@@ -57,10 +61,18 @@ function createBot() {
     reconnecting = false;
     lastHealth = bot.health;
 
-    startIdle();
+    // 🔐 force login once (fix auth bugs)
+    setTimeout(() => {
+      bot.chat("/login bot112022");
+    }, 3000);
+
+    // start idle after auth
+    setTimeout(() => {
+      startIdle();
+    }, 6000);
   });
 
-  // 💥 DAMAGE DETECTION
+  // ================= DAMAGE =================
   bot.on("health", () => {
     if (!bot?.entity) return;
 
@@ -72,6 +84,7 @@ function createBot() {
     lastHealth = bot.health;
   });
 
+  // ================= DEBUG =================
   bot.on("kicked", (r) => {
     console.log("❌ Kicked:", r.toString());
     safeReconnect();
@@ -89,34 +102,37 @@ function createBot() {
 
 // ================= HIT REACTION =================
 function reactToHit() {
-  if (!bot?.entity) return;
+  if (!bot?.entity || reacting) return;
+
+  reacting = true;
+  stopIdle(); // 🔥 stop idle
 
   const moves = ["forward", "back", "left", "right"];
   const move = moves[Math.floor(Math.random() * moves.length)];
 
-  // sprint escape
   bot.setControlState("sprint", true);
   bot.setControlState(move, true);
 
-  // jump reaction (safe)
   if (bot.entity.onGround) {
     bot.setControlState("jump", true);
-    setTimeout(() => bot.setControlState("jump", false), 100);
+    setTimeout(() => bot.setControlState("jump", false), 120);
   }
 
   setTimeout(() => {
     bot.setControlState(move, false);
     bot.setControlState("sprint", false);
-  }, 1000 + Math.random() * 500);
+
+    reacting = false;
+    startIdle(); // ✅ resume idle
+  }, 1200 + Math.random() * 500);
 }
 
-// ================= IDLE SYSTEM =================
+// ================= IDLE =================
 function startIdle() {
   stopIdle();
 
-  // 👀 LOOK
   function look() {
-    if (!bot?.entity) return;
+    if (!bot?.entity || reacting) return;
 
     try {
       const yaw = bot.entity.yaw + (Math.random() - 0.5) * 0.6;
@@ -128,37 +144,22 @@ function startIdle() {
   }
   look();
 
-  // 🦘 CLEAN JUMP (NO FLY)
-  if (jumpInterval) clearInterval(jumpInterval);
-
   jumpInterval = setInterval(() => {
-    if (!bot?.entity) return;
+    if (!bot?.entity || reacting) return;
     if (!bot.entity.onGround) return;
 
     bot.setControlState("jump", true);
-
-    setTimeout(() => {
-      bot.setControlState("jump", false);
-    }, 100);
-
-  }, 4500 + Math.random() * 1000);
-
-  // 🚶 SAFE MOVEMENT
-  if (moveInterval) clearInterval(moveInterval);
+    setTimeout(() => bot.setControlState("jump", false), 100);
+  }, 4500);
 
   moveInterval = setInterval(() => {
-    if (!bot?.entity) return;
+    if (!bot?.entity || reacting) return;
 
-    const moves = ["left", "right"];
-    const move = moves[Math.floor(Math.random() * moves.length)];
-
+    const move = Math.random() > 0.5 ? "left" : "right";
     bot.setControlState(move, true);
 
-    setTimeout(() => {
-      bot.setControlState(move, false);
-    }, 500 + Math.random() * 500);
-
-  }, 6000 + Math.random() * 3000);
+    setTimeout(() => bot.setControlState(move, false), 500);
+  }, 6000);
 }
 
 // ================= STOP =================
@@ -188,4 +189,4 @@ function safeReconnect() {
 }
 
 // ================= START =================
-createBot();// why its stops jumping or moving when it got ahit dont remove login system or registration 
+createBot();
