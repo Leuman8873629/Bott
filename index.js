@@ -44,8 +44,8 @@ function createBot() {
     port: 27900,
     username: "heheh_botwaa",
 
-    version: false,        // ✅ AUTO VERSION
-    auth: "offline",       // ✅ CRACKED SUPPORT
+    version: false,
+    auth: "offline",
 
     plugins: [AutoAuth],
     AutoAuth: {
@@ -62,28 +62,31 @@ function createBot() {
     reconnecting = false;
     lastHealth = bot.health;
 
-    // ⏳ wait for login/register before moving
-    setTimeout(() => {
-      startIdle();
-    }, 6000);
+    // 🔥 FORCE AUTH SYSTEM (NO FAIL)
+    setTimeout(() => bot.chat("/login bot112022"), 2000);
+    setTimeout(() => bot.chat("/register bot112022 bot112022"), 4000);
+    setTimeout(() => bot.chat("/login bot112022"), 6000);
+
+    // start movement AFTER auth
+    setTimeout(() => startIdle(), 8000);
   });
 
-  // ================= SMART AUTH =================
+  // ================= SMART AUTH (CHAT DETECTION) =================
   bot.on("messagestr", (msg) => {
     const message = msg.toLowerCase();
 
-    if (message.includes("register")) {
+    if (message.includes("/register") || message.includes("please register")) {
       console.log("📝 Registering...");
-      bot.chat(`/register bot112022 bot112022`);
+      bot.chat("/register bot112022 bot112022");
     }
 
-    if (message.includes("login")) {
+    if (message.includes("/login") || message.includes("please login")) {
       console.log("🔐 Logging in...");
-      bot.chat(`/login bot112022`);
+      bot.chat("/login bot112022");
     }
   });
 
-  // 💥 DAMAGE DETECTION
+  // ================= DAMAGE =================
   bot.on("health", () => {
     if (!bot?.entity) return;
 
@@ -95,7 +98,7 @@ function createBot() {
     lastHealth = bot.health;
   });
 
-  // 🔥 FULL KICK REASON
+  // ================= DEBUG =================
   bot.on("kicked", (reason) => {
     console.log("❌ FULL KICK:", reason);
     safeReconnect();
@@ -138,7 +141,7 @@ function reactToHit() {
   }, 1200 + Math.random() * 500);
 }
 
-// ================= IDLE SYSTEM =================
+// ================= IDLE =================
 function startIdle() {
   stopIdle();
 
@@ -161,22 +164,16 @@ function startIdle() {
 
     bot.setControlState("jump", true);
     setTimeout(() => bot.setControlState("jump", false), 100);
-
-  }, 4500 + Math.random() * 1000);
+  }, 4500);
 
   moveInterval = setInterval(() => {
     if (!bot?.entity || reacting) return;
 
-    const moves = ["left", "right"];
-    const move = moves[Math.floor(Math.random() * moves.length)];
-
+    const move = Math.random() > 0.5 ? "left" : "right";
     bot.setControlState(move, true);
 
-    setTimeout(() => {
-      bot.setControlState(move, false);
-    }, 500 + Math.random() * 500);
-
-  }, 6000 + Math.random() * 3000);
+    setTimeout(() => bot.setControlState(move, false), 500);
+  }, 6000);
 }
 
 // ================= STOP =================
@@ -184,10 +181,6 @@ function stopIdle() {
   if (lookLoop) clearTimeout(lookLoop);
   if (jumpInterval) clearInterval(jumpInterval);
   if (moveInterval) clearInterval(moveInterval);
-
-  lookLoop = null;
-  jumpInterval = null;
-  moveInterval = null;
 }
 
 // ================= RECONNECT =================
