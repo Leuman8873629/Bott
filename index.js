@@ -2,7 +2,6 @@ const express = require("express");
 const http = require("http");
 const mineflayer = require("mineflayer");
 const AutoAuth = require("mineflayer-auto-auth");
-const { pathfinder } = require("mineflayer-pathfinder");
 
 const app = express();
 app.get("/", (_, res) => res.send("Bot running"));
@@ -17,9 +16,6 @@ setInterval(() => {
 
 let bot = null;
 let reconnecting = false;
-let alertMode = false;
-
-let lookLoop = null;
 let jumpLoop = null;
 
 // ================= RESET =================
@@ -59,8 +55,6 @@ function createBot() {
     }
   });
 
-  bot.loadPlugin(pathfinder);
-
   bot.once("login", () => console.log("🔐 Logged in"));
 
   bot.once("spawn", () => {
@@ -73,24 +67,8 @@ function createBot() {
     }, 3000);
 
     setTimeout(() => {
-      startSystems();
+      startJump();
     }, 6000);
-  });
-
-  // 💥 HIT FIX (NO FREEZE, NO MOVEMENT SPAM)
-  bot.on("entityHurt", (entity) => {
-    if (!bot?.entity) return;
-
-    if (entity === bot.entity) {
-      console.log("💥 Got hit → ALERT MODE");
-      alertMode = true;
-
-      // 🔥 ONLY JUMP (no forward movement)
-      bot.setControlState("jump", true);
-      setTimeout(() => {
-        bot.setControlState("jump", false);
-      }, 150);
-    }
   });
 
   bot.on("kicked", (r) => {
@@ -108,62 +86,33 @@ function createBot() {
   });
 }
 
-// ================= SYSTEM START =================
-function startSystems() {
-  stopSystems();
-  resetControls();
-
-  startLook();
-  startJump();
-}
-
-// ================= LOOK =================
-function startLook() {
-  function loop() {
-    if (!bot?.entity) return;
-
-    try {
-      const yaw = bot.entity.yaw + (Math.random() - 0.5) * 0.6;
-      const pitch = bot.entity.pitch + (Math.random() - 0.5) * 0.3;
-      bot.look(yaw, pitch, true);
-    } catch {}
-
-    lookLoop = setTimeout(loop, 2000 + Math.random() * 2000);
-  }
-  loop();
-}
-
-// ================= JUMP =================
+// ================= JUMP ONLY =================
 function startJump() {
-  function loop() {
-    if (!bot?.entity || !bot.entity.position) return;
-
-    if (bot.entity.onGround) {
-      bot.setControlState("jump", true);
-      setTimeout(() => bot.setControlState("jump", false), 120);
-    }
-
-    const delay = alertMode
-      ? 2000 + Math.random() * 1000   // 🔥 2–3 sec after hit
-      : 5000;
-
-    jumpLoop = setTimeout(loop, delay);
-  }
-  loop();
-}
-
-// ================= STOP =================
-function stopSystems() {
-  if (lookLoop) clearTimeout(lookLoop);
   if (jumpLoop) clearTimeout(jumpLoop);
 
-  lookLoop = null;
-  jumpLoop = null;
+  function loop() {
+    if (!bot?.entity || !bot.entity.onGround) {
+      jumpLoop = setTimeout(loop, 1000);
+      return;
+    }
+
+    // jump
+    bot.setControlState("jump", true);
+
+    setTimeout(() => {
+      bot.setControlState("jump", false);
+    }, 120);
+
+    // repeat every 2–3 sec
+    jumpLoop = setTimeout(loop, 2000 + Math.random() * 1000);
+  }
+
+  loop();
 }
 
 // ================= RECONNECT =================
 function safeReconnect() {
-  stopSystems();
+  if (jumpLoop) clearTimeout(jumpLoop);
   resetControls();
 
   if (reconnecting) return;
