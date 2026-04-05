@@ -21,19 +21,12 @@ let lookLoop = null;
 let jumpInterval = null;
 let moveInterval = null;
 
-let lastHealth = 20;
-let reacting = false;
-
-// ================= CONTROL RESET =================
+// ================= RESET CONTROLS =================
 function resetControls() {
   if (!bot) return;
 
-  const controls = [
-    "forward", "back", "left", "right",
-    "jump", "sprint", "sneak"
-  ];
-
-  controls.forEach(c => bot.setControlState(c, false));
+  ["forward","back","left","right","jump","sprint","sneak"]
+    .forEach(c => bot.setControlState(c, false));
 }
 
 // ================= CREATE BOT =================
@@ -62,7 +55,7 @@ function createBot() {
       password: "bot112022",
       logging: true,
       timeout: 5000,
-      repeat: false // stop spam
+      repeat: false
     }
   });
 
@@ -71,32 +64,18 @@ function createBot() {
   bot.once("spawn", () => {
     console.log("✅ Bot joined!");
     reconnecting = false;
-    lastHealth = bot.health;
 
-    // 🔐 force login once
+    // 🔐 force login
     setTimeout(() => {
       bot.chat("/login bot112022");
     }, 3000);
 
-    // start idle safely
+    // start idle
     setTimeout(() => {
       startIdle();
     }, 6000);
   });
 
-  // ================= DAMAGE =================
-  bot.on("health", () => {
-    if (!bot?.entity) return;
-
-    if (bot.health < lastHealth && !reacting) {
-      console.log("💥 Got hit!");
-      reactToHit();
-    }
-
-    lastHealth = bot.health;
-  });
-
-  // ================= DEBUG =================
   bot.on("kicked", (r) => {
     console.log("❌ Kicked:", r.toString());
     safeReconnect();
@@ -112,45 +91,13 @@ function createBot() {
   });
 }
 
-// ================= HIT REACTION =================
-function reactToHit() {
-  if (!bot?.entity || reacting) return;
-
-  reacting = true;
-
-  stopIdle();
-  resetControls();
-
-  const moves = ["forward", "back", "left", "right"];
-  const move = moves[Math.floor(Math.random() * moves.length)];
-
-  bot.setControlState("sprint", true);
-  bot.setControlState(move, true);
-
-  if (bot.entity.onGround) {
-    bot.setControlState("jump", true);
-    setTimeout(() => bot.setControlState("jump", false), 120);
-  }
-
-  setTimeout(() => {
-    resetControls();
-
-    reacting = false;
-
-    setTimeout(() => {
-      startIdle();
-    }, 200);
-
-  }, 1200 + Math.random() * 500);
-}
-
 // ================= IDLE =================
 function startIdle() {
   stopIdle();
-  resetControls();
+  resetControls(); // 🔥 important
 
   function look() {
-    if (!bot?.entity || reacting) return;
+    if (!bot?.entity) return;
 
     try {
       const yaw = bot.entity.yaw + (Math.random() - 0.5) * 0.6;
@@ -162,22 +109,26 @@ function startIdle() {
   }
   look();
 
+  // jump
   jumpInterval = setInterval(() => {
-    if (!bot?.entity || reacting) return;
+    if (!bot?.entity) return;
     if (!bot.entity.onGround) return;
 
     bot.setControlState("jump", true);
     setTimeout(() => bot.setControlState("jump", false), 100);
-  }, 4500);
+  }, 5000);
 
+  // move
   moveInterval = setInterval(() => {
-    if (!bot?.entity || reacting) return;
+    if (!bot?.entity) return;
 
     const move = Math.random() > 0.5 ? "left" : "right";
     bot.setControlState(move, true);
 
-    setTimeout(() => bot.setControlState(move, false), 500);
-  }, 6000);
+    setTimeout(() => {
+      bot.setControlState(move, false);
+    }, 500);
+  }, 7000);
 }
 
 // ================= STOP =================
